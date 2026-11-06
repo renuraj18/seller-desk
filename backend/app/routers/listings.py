@@ -1,0 +1,124 @@
+from fastapi import APIRouter, HTTPException
+from pydantic import BaseModel
+
+from ..db import get_conn, row_to_dict, rows_to_dicts
+from ..services.pricing import account_price, account_sku
+
+router = APIRouter(prefix="/api", tags=["listings"])
+
+
+class ListingIn(BaseModel):
+    product_id: int
+    account_id: int
+    marketplace_sku: str | None = None
+    listing_ref: str | None = None
+    price: float | None = None
+    mrp: float | None = None
+    stock_qty: int | None = None
+    title_override: str | None = None
+    status: str = "draft"
+    notes: str | None = None
+
+
+class BulkAdd(BaseModel):
+    account_id: int
+    product_ids: list[int]
+
+
+class BulkStatus(BaseModel):
+    listing_ids: list[int]
+    status: str
+
+
+def _account(c, account_id):
+    a = row_to_dict(c.execute("SELECT * FROM accounts WHERE id=?", (account_id,)).fetchone())
+    if not a:
+        raise HTTPException(404, "Account not found")
+    return a
+
+
+@router.get("/accounts/{account_id}/listings")
+def account_listings(account_id: int):
+    """Every product, with its listing on this account (if any) and the effective price/SKU."""
+    with get_conn() as c:
+        acc = _account(c, account_id)
+        products = rows_to_dicts(c.execute("SELECT * FROM products ORDER BY sku"))
+        listings = {l["product_id"]: l for l in rows_to_dicts(
+            c.execute("SELECT * FROM listings WHERE account_id=?", (account_id,)))}
+    out = []
+    for p in products:
+        l = listings.get(p["id"])
+        out.append({
+            "product_id": p["id"], "sku": p["sku"], "name": p["name"], "fabric": p["fabric"], "color": p["color"],
+            "image": (p.get("images") or [None])[0], "base_price": p["selling_price"], "mrp": p["mrp"],
+            "cost_price": p["cost_price"],
+            "listing": l,
+            "effective_sku": account_sku(p, acc, l),
+            "effective_price": account_price(p, acc, l),
+        })
+    return {"account": acc, "rows": out}
+
+
+@router.put("/listings")
+def upsert_listing(l: ListingIn):
+    with get_conn() as c:
+        c.execute(
+            "INSERT INTO listings (product_id, account_id, marketplace_sku, listing_ref, price, mrp, stock_qty, "
+            "title_override, status, notes) VALUES (?,?,?,?,?,?,?,?,?,?) "
+            "ON CONFLICT(product_id, account_id) DO UPDATE SET marketplace_sku=excluded.marketplace_sku, "
+            "listing_ref=excluded.listing_ref, price=excluded.price, mrp=excluded.mrp, stock_qty=excluded.stock_qty, "
+            "title_override=excluded.title_override, status=excluded.status, notes=excluded.notes",
+            (l.product_id, l.account_id, l.marketplace_sku or None, l.listing_ref or None, l.price, l.mrp,
+             l.stock_qty, l.title_override or None, l.status, l.notes))
+        return row_to_dict(c.execute("SELECT * FROM listings WHERE product_id=? AND account_id=?",
+                                     (l.product_id, l.account_id)).fetchone())
+
+
+@router.post("/listings/bulk-add")
+def bulk_add(b: BulkAdd):
+    with get_conn() as c:
+        _account(c, b.account_id)
+        added = 0
+        for pid in b.product_ids:
+            cur = c.execute("INSERT OR IGNORE INTO listings (product_id, account_id) VALUES (?,?)",
+                            (pid, b.account_id))
+            added += cur.rowcount
+    return {"added": added}
+
+
+@router.post("/listings/bulk-status")
+def bulk_status(b: BulkStatus):
+    with get_conn() as c:
+        c.executemany("UPDATE listings SET status=? WHERE id=?", [(b.status, i) for i in b.listing_ids])
+    return {"updated": len(b.listing_ids)}
+
+
+@router.delete("/listings/{listing_id}")
+def delete_listing(listing_id: int):
+    with get_conn() as c:
+        c.execute("DELETE FROM listings WHERE id=?", (listing_id,))
+    return {"ok": True}
+
+
+@router.get("/dashboard")
+def dashboard():
+    with get_conn() as c:
+        q = lambda sql, *a: c.execute(sql, a).fetchone()[0]
+        accounts = rows_to_dicts(c.execute(
+            "SELECT a.id, a.name, a.marketplace, f.name AS firm_name, "
+            "SUM(CASE WHEN l.status='live' THEN 1 ELSE 0 END) AS live, "
+            "SUM(CASE WHEN l.status='draft' THEN 1 ELSE 0 END) AS draft, "
+            "SUM(CASE WHEN l.status='exported' THEN 1 ELSE 0 END) AS exported, "
+            "SUM(CASE WHEN l.status IN ('rejected','inactive') THEN 1 ELSE 0 END) AS other "
+            "FROM accounts a JOIN firms f ON f.id=a.firm_id LEFT JOIN listings l ON l.account_id=a.id "
+            "GROUP BY a.id ORDER BY f.name, a.marketplace"))
+        return {
+            "firms": q("SELECT COUNT(*) FROM firms"),
+            "accounts": q("SELECT COUNT(*) FROM accounts"),
+            "products": q("SELECT COUNT(*) FROM products"),
+            "listings": q("SELECT COUNT(*) FROM listings"),
+            "templates": q("SELECT COUNT(*) FROM template_profiles"),
+            "incomplete_products": q("SELECT COUNT(*) FROM products WHERE fabric IS NULL OR color IS NULL "
+                                     "OR mrp IS NULL OR selling_price IS NULL OR hsn IS NULL OR images='[]'"),
+            "by_account": accounts,
+        }
