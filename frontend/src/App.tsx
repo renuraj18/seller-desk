@@ -12,12 +12,16 @@ import TemplateEdit from './pages/TemplateEdit'
 import Keywords from './pages/Keywords'
 import Settings from './pages/Settings'
 import Payments from './pages/Payments'
+import Extension from './pages/Extension'
+import Inventory from './pages/Inventory'
+import ImportFolder from './pages/ImportFolder'
+import Orders from './pages/Orders'
 
 const NAV = [
   { group: 'Overview', items: [['/', 'Dashboard']] },
-  { group: 'Catalog', items: [['/products', 'Products'], ['/keywords', 'SEO keywords'], ['/listings', 'Listings by account']] },
-  { group: 'Marketplaces', items: [['/connections', 'Connections & sync'], ['/matching', 'SKU matching'], ['/templates', 'Upload templates']] },
-  { group: 'Money', items: [['/payments', 'Payments & P&L']] },
+  { group: 'Catalog', items: [['/products', 'Products'], ['/inventory', 'Inventory'], ['/keywords', 'SEO keywords'], ['/listings', 'Listings by account']] },
+  { group: 'Orders & money', items: [['/orders', 'Orders & shipments'], ['/payments', 'Payments & P&L']] },
+  { group: 'Marketplaces', items: [['/extension', 'Browser extension'], ['/connections', 'Connections & sync'], ['/matching', 'SKU matching'], ['/templates', 'Upload templates']] },
   { group: 'Admin', items: [['/setup', 'Firms & accounts'], ['/settings', 'Settings']] },
 ]
 
@@ -42,7 +46,11 @@ export default function App() {
           <Route path="/connections" element={<Connections />} />
           <Route path="/matching" element={<Matching />} />
           <Route path="/products" element={<Products />} />
+          <Route path="/products/import-folder" element={<ImportFolder />} />
           <Route path="/products/:id" element={<ProductEdit />} />
+          <Route path="/inventory" element={<Inventory />} />
+          <Route path="/extension" element={<Extension />} />
+          <Route path="/orders" element={<Orders />} />
           <Route path="/listings" element={<Listings />} />
           <Route path="/templates" element={<Templates />} />
           <Route path="/templates/:id" element={<TemplateEdit />} />

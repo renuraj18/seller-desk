@@ -1,0 +1,202 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Seller Desk – practice listing form</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<style>
+  body { font-family: system-ui, sans-serif; background: #f4f5f7; margin: 0; color: #222; }
+  header { background: #570a57; color: #fff; padding: 14px 24px; font-weight: 600; }
+  main { max-width: 760px; margin: 24px auto; background: #fff; border-radius: 10px; padding: 24px 28px; box-shadow: 0 1px 3px rgba(0,0,0,.1); }
+  .note { background: #fff6d8; border: 1px solid #f0dc9a; padding: 10px 12px; border-radius: 8px; font-size: 13px; margin-bottom: 18px; }
+  .row { margin-bottom: 16px; position: relative; }
+  .lbl { font-size: 13px; font-weight: 600; margin-bottom: 6px; display: block; }
+  .req::after { content: " *"; color: #c00; }
+  input, select, textarea { width: 100%; box-sizing: border-box; padding: 9px 10px; border: 1px solid #ccc; border-radius: 6px; font: inherit; }
+  .hint { font-size: 11px; color: #888; margin-top: 3px; }
+  .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 0 16px; }
+  ul[role=listbox], .menu { position: absolute; z-index: 5; background: #fff; border: 1px solid #ccc; border-radius: 6px; list-style: none; margin: 2px 0 0; padding: 4px 0; width: 100%; max-height: 180px; overflow: auto; box-shadow: 0 6px 16px rgba(0,0,0,.12); }
+  ul[role=listbox] li, .menu div { padding: 7px 10px; cursor: pointer; }
+  ul[role=listbox] li:hover, .menu div:hover { background: #f1e6f1; }
+  .dd { border: 1px solid #ccc; border-radius: 6px; padding: 9px 10px; cursor: pointer; min-height: 18px; }
+  .dd.empty { color: #999; }
+  button.submit { background: #570a57; color: #fff; border: 0; border-radius: 6px; padding: 10px 18px; font: inherit; cursor: pointer; }
+  pre { background: #f6f6f6; padding: 12px; border-radius: 8px; font-size: 12px; white-space: pre-wrap; }
+</style>
+</head>
+<body>
+<header>Practice seller panel · Add catalog (Sarees)</header>
+<main>
+  <div class="note">This page imitates a marketplace listing form so you can try the Seller Desk extension safely. Nothing is sent anywhere. Open the Seller Desk panel (bottom right), pick an account and a saree, then click <b>Fill this page</b>.</div>
+
+  <div class="row">
+    <label class="lbl" for="pname">Product Name</label>
+    <input id="pname" maxlength="100">
+    <div class="hint">0/100</div>
+  </div>
+
+  <div class="grid">
+    <!-- React-style controlled input: only keeps values that arrive through input events -->
+    <div class="row"><span class="lbl req">Meesho Price</span><input data-controlled="price" inputmode="numeric"></div>
+    <div class="row"><span class="lbl req">Wrong/Defective Returns Price</span><input data-controlled="return_price" inputmode="numeric"></div>
+    <div class="row"><span class="lbl req">MRP</span><input data-controlled="mrp" inputmode="numeric"></div>
+    <div class="row">
+      <label class="lbl" for="gst">GST %</label>
+      <select id="gst"><option value="">Select</option><option>0</option><option>5</option><option>12</option><option>18</option></select>
+    </div>
+    <div class="row"><span class="lbl">HSN ID</span><input name="hsn" placeholder="e.g. 5007"></div>
+    <div class="row"><span class="lbl">Net Weight (gms)</span><input type="number" name="weight"></div>
+    <div class="row"><span class="lbl">Inventory</span><input type="number" name="inventory"></div>
+    <div class="row"><span class="lbl">Product ID / Style ID</span><input name="styleid"></div>
+  </div>
+
+  <div class="grid">
+    <!-- Searchable combobox (like MUI Autocomplete) -->
+    <div class="row combo" data-options="Art Silk,Banarasi Silk,Chiffon,Cotton,Georgette,Kanjivaram Silk,Organza,Soft Silk">
+      <span class="lbl req">Saree Fabric</span>
+      <input role="combobox" aria-autocomplete="list" autocomplete="off" placeholder="Search">
+    </div>
+    <div class="row combo" data-options="Black,Blue,Gold,Green,Maroon,Mustard,Pink,Red,Teal,White">
+      <span class="lbl req">Color</span>
+      <input role="combobox" aria-autocomplete="list" autocomplete="off" placeholder="Search">
+    </div>
+    <!-- Click-to-open dropdown (div based) -->
+    <div class="row clickdd" data-options="Running Blouse,Separate Blouse Piece,Without Blouse">
+      <span class="lbl req">Blouse</span>
+      <div class="dd empty" role="button" aria-haspopup="listbox" tabindex="0">Select</div>
+    </div>
+    <div class="row clickdd" data-options="Casual,Festive,Party,Traditional,Wedding">
+      <span class="lbl">Occasion</span>
+      <div class="dd empty" role="button" aria-haspopup="listbox" tabindex="0">Select</div>
+    </div>
+    <div class="row combo" data-options="Embroidered,Printed,Solid,Woven Design,Zari Woven">
+      <span class="lbl">Pattern</span>
+      <input role="combobox" aria-autocomplete="list" autocomplete="off" placeholder="Search">
+    </div>
+    <div class="row"><span class="lbl">Saree Length</span><input name="slen" placeholder="in metres"></div>
+  </div>
+
+  <!-- Web component with shadow DOM, like Amazon Seller Central's kat-input -->
+  <div class="row"><demo-input label="Brand Name"></demo-input></div>
+
+  <div class="row"><span class="lbl">Description</span><textarea rows="4" data-controlled="description"></textarea></div>
+  <div class="row"><span class="lbl">Country of Origin</span><input name="coo"></div>
+  <div class="row"><span class="lbl">Manufacturer Details</span><textarea rows="2" name="mfr"></textarea></div>
+  <div class="row"><span class="lbl">Catalog Group Code</span><input name="weavecode"><div class="hint">A field the extension won't know, to try “Teach a field”.</div></div>
+
+  <div class="row">
+    <span class="lbl req">Images</span>
+    <input type="file" accept="image/*" multiple id="images">
+    <div class="hint" id="imgcount">No images</div>
+  </div>
+
+  <button class="submit" id="submit">Submit catalog</button>
+  <pre id="out" hidden></pre>
+</main>
+
+<script>
+  // ----- React-like controlled inputs: state only changes on input events
+  const state = {};
+  document.querySelectorAll('[data-controlled]').forEach((el) => {
+    const key = el.dataset.controlled;
+    state[key] = '';
+    el.addEventListener('input', (e) => { state[key] = e.target.value });
+    // a re-render resets the DOM value to state (what React does after a setter-only change)
+    el.addEventListener('blur', () => setTimeout(() => { el.value = state[key] }, 0));
+  });
+
+  // ----- Searchable combobox
+  document.querySelectorAll('.combo').forEach((row) => {
+    const input = row.querySelector('input');
+    const opts = row.dataset.options.split(',');
+    let list = null;
+    row.dataset.selected = '';
+    const close = () => { list?.remove(); list = null; input.setAttribute('aria-expanded', 'false') };
+    const open = () => {
+      close();
+      list = document.createElement('ul');
+      list.setAttribute('role', 'listbox');
+      const q = input.value.toLowerCase();
+      opts.filter((o) => o.toLowerCase().includes(q)).forEach((o) => {
+        const li = document.createElement('li');
+        li.setAttribute('role', 'option');
+        li.textContent = o;
+        li.addEventListener('mousedown', (e) => e.preventDefault());
+        li.addEventListener('click', () => { input.value = o; row.dataset.selected = o; close() });
+        list.appendChild(li);
+      });
+      row.appendChild(list);
+      input.setAttribute('aria-expanded', 'true');
+    };
+    input.addEventListener('focus', open);
+    input.addEventListener('input', () => { row.dataset.selected = ''; open() });
+    input.addEventListener('blur', () => setTimeout(() => { close(); if (!row.dataset.selected) input.value = '' }, 150));
+  });
+
+  // ----- Click dropdown
+  document.querySelectorAll('.clickdd').forEach((row) => {
+    const dd = row.querySelector('.dd');
+    const opts = row.dataset.options.split(',');
+    row.dataset.selected = '';
+    dd.addEventListener('click', () => {
+      if (row.querySelector('.menu')) { row.querySelector('.menu').remove(); return }
+      const menu = document.createElement('div');
+      menu.className = 'menu';
+      menu.setAttribute('role', 'listbox');
+      opts.forEach((o) => {
+        const d = document.createElement('div');
+        d.setAttribute('role', 'option');
+        d.textContent = o;
+        d.addEventListener('click', (e) => { e.stopPropagation(); dd.textContent = o; dd.classList.remove('empty'); row.dataset.selected = o; menu.remove() });
+        menu.appendChild(d);
+      });
+      row.appendChild(menu);
+    });
+  });
+
+  // ----- Shadow DOM web component
+  customElements.define('demo-input', class extends HTMLElement {
+    constructor() {
+      super();
+      const root = this.attachShadow({ mode: 'open' });
+      root.innerHTML = `<style>label{font-size:13px;font-weight:600;display:block;margin-bottom:6px}
+        input{width:100%;box-sizing:border-box;padding:9px 10px;border:1px solid #ccc;border-radius:6px;font:inherit}</style>
+        <label>${this.getAttribute('label')}</label><input>`;
+      this._v = '';
+      root.querySelector('input').addEventListener('input', (e) => { this._v = e.target.value });
+    }
+    get value() { return this._v }
+  });
+
+  document.getElementById('images').addEventListener('change', (e) => {
+    document.getElementById('imgcount').textContent = `${e.target.files.length} image(s) attached`;
+  });
+
+  window.__practiceForm = () => ({
+    product_name: document.getElementById('pname').value,
+    ...state,
+    gst: document.getElementById('gst').value,
+    hsn: document.querySelector('[name=hsn]').value,
+    weight: document.querySelector('[name=weight]').value,
+    inventory: document.querySelector('[name=inventory]').value,
+    style_id: document.querySelector('[name=styleid]').value,
+    fabric: document.querySelectorAll('.combo')[0].dataset.selected,
+    color: document.querySelectorAll('.combo')[1].dataset.selected,
+    pattern: document.querySelectorAll('.combo')[2].dataset.selected,
+    blouse: document.querySelectorAll('.clickdd')[0].dataset.selected,
+    occasion: document.querySelectorAll('.clickdd')[1].dataset.selected,
+    saree_length: document.querySelector('[name=slen]').value,
+    brand: document.querySelector('demo-input').value,
+    country: document.querySelector('[name=coo]').value,
+    manufacturer: document.querySelector('[name=mfr]').value,
+    weave_code: document.querySelector('[name=weavecode]').value,
+    images: document.getElementById('images').files.length,
+  });
+  document.getElementById('submit').addEventListener('click', () => {
+    const out = document.getElementById('out');
+    out.hidden = false;
+    out.textContent = 'What the marketplace would receive:\n' + JSON.stringify(window.__practiceForm(), null, 2);
+  });
+</script>
+</body>
+</html>

@@ -9,7 +9,7 @@ DB_PATH = DATA_DIR / "seller_desk.db"
 UPLOAD_DIR = DATA_DIR / "templates"
 EXPORT_DIR = DATA_DIR / "exports"
 
-JSON_COLUMNS = {"images", "extra", "columns", "mapping", "warnings", "raw", "bullets", "issues"}
+JSON_COLUMNS = {"images", "extra", "columns", "mapping", "warnings", "raw", "bullets", "issues", "value_map"}
 
 
 def init_dirs():
@@ -39,6 +39,26 @@ def init_db():
     schema = (Path(__file__).parent / "schema.sql").read_text()
     with get_conn() as conn:
         conn.executescript(schema)
+        migrate(conn)
+
+
+# columns added after the first release: (table, column, definition)
+MIGRATIONS = [
+    ("accounts", "store_name", "TEXT"),
+    ("orders", "status_text", "TEXT"),
+    ("orders", "cancel_charges", "REAL"),
+    ("orders", "return_charges", "REAL"),
+    ("orders", "awb", "TEXT"),
+    ("orders", "source", "TEXT"),
+    ("orders", "updated_at", "TEXT"),
+]
+
+
+def migrate(conn):
+    for table, col, definition in MIGRATIONS:
+        cols = {r[1] for r in conn.execute(f"PRAGMA table_info({table})")}
+        if col not in cols:
+            conn.execute(f"ALTER TABLE {table} ADD COLUMN {col} {definition}")
 
 
 def row_to_dict(row) -> dict | None:

@@ -1,0 +1,24 @@
+{
+  "manifest_version": 3,
+  "name": "Seller Desk – listing autofill",
+  "version": "1.0.0",
+  "description": "Fill Meesho, Flipkart and Amazon listing forms from your Seller Desk saree catalogue, for every account and firm.",
+  "icons": { "16": "icons/icon16.png", "48": "icons/icon48.png", "128": "icons/icon128.png" },
+  "action": { "default_popup": "popup.html", "default_title": "Seller Desk" },
+  "background": { "service_worker": "background.js" },
+  "permissions": ["storage"],
+  "host_permissions": ["http://localhost/*", "http://127.0.0.1/*"],
+  "content_scripts": [
+    {
+      "matches": [
+        "https://supplier.meesho.com/*",
+        "https://seller.flipkart.com/*",
+        "https://sellercentral.amazon.in/*",
+        "http://localhost/ext-demo*",
+        "http://127.0.0.1/ext-demo*"
+      ],
+      "js": ["engine.js", "content.js"],
+      "run_at": "document_idle"
+    }
+  ]
+}

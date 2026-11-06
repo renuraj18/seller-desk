@@ -188,6 +188,19 @@ CREATE TABLE IF NOT EXISTS content_drafts (
     UNIQUE (product_id, marketplace)
 );
 
+-- Fields taught in the browser extension, per marketplace form (shared by all accounts/firms)
+CREATE TABLE IF NOT EXISTS form_fields (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    marketplace TEXT NOT NULL,
+    label_norm TEXT NOT NULL,        -- normalised label text of the form field
+    label TEXT,
+    source TEXT,                     -- '' = ignore this field
+    value TEXT,                      -- for const.custom
+    value_map TEXT DEFAULT '{}',
+    updated_at TEXT DEFAULT (datetime('now')),
+    UNIQUE (marketplace, label_norm)
+);
+
 -- ---------- Phase 2: payments and P&L ----------
 CREATE TABLE IF NOT EXISTS orders (
     id INTEGER PRIMARY KEY AUTOINCREMENT,

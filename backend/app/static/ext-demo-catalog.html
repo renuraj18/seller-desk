@@ -1,0 +1,30 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><title>Practice – Catalog with variants</title>
+<style>
+ body{font-family:system-ui,sans-serif;background:#f4f5f7;margin:0;color:#222} header{background:#570a57;color:#fff;padding:14px 24px;font-weight:600}
+ main{max-width:760px;margin:24px auto} .note{background:#fff6d8;border:1px solid #f0dc9a;padding:10px 12px;border-radius:8px;font-size:13px;margin-bottom:16px}
+ section{background:#fff;border-radius:10px;padding:16px 20px;margin-bottom:14px} h3{margin:0 0 12px;font-size:15px}
+ .grid{display:grid;grid-template-columns:1fr 1fr;gap:0 16px} .row{margin-bottom:12px} .lbl{display:block;font-size:13px;font-weight:600;margin-bottom:5px}
+ input,select{width:100%;box-sizing:border-box;padding:8px 10px;border:1px solid #ccc;border-radius:6px;font:inherit}
+</style></head><body>
+<header>Practice seller panel · Add catalog with several products</header>
+<main>
+ <div class="note">One catalog, one section per colour. Pick a saree group in Seller Desk with “All variants” and click <b>Fill this page</b>.</div>
+ <section><h3>Catalog details</h3><div class="grid">
+  <div class="row"><span class="lbl">Saree Fabric</span><input name="fabric"></div>
+  <div class="row"><span class="lbl">GST %</span><select name="gst"><option></option><option>5</option><option>12</option></select></div>
+  <div class="row"><span class="lbl">HSN ID</span><input name="hsn"></div>
+  <div class="row"><span class="lbl">Occasion</span><input name="occ"></div></div></section>
+ <section class="p"><h3>Product 1</h3><div class="grid">
+  <div class="row"><span class="lbl">Product Name</span><input name="name"></div><div class="row"><span class="lbl">Color</span><input name="color"></div>
+  <div class="row"><span class="lbl">Meesho Price</span><input name="price"></div><div class="row"><span class="lbl">Inventory</span><input name="inv"></div>
+  <div class="row"><span class="lbl">Product ID / Style ID</span><input name="sku"></div></div></section>
+ <section class="p"><h3>Product 2</h3><div class="grid">
+  <div class="row"><span class="lbl">Product Name</span><input name="name"></div><div class="row"><span class="lbl">Color</span><input name="color"></div>
+  <div class="row"><span class="lbl">Meesho Price</span><input name="price"></div><div class="row"><span class="lbl">Inventory</span><input name="inv"></div>
+  <div class="row"><span class="lbl">Product ID / Style ID</span><input name="sku"></div></div></section>
+</main>
+<script>
+ window.__catalog=()=>({fabric:document.querySelector('[name=fabric]').value,gst:document.querySelector('[name=gst]').value,
+  products:[...document.querySelectorAll('section.p')].map(s=>Object.fromEntries([...s.querySelectorAll('input')].map(i=>[i.name,i.value])))})
+</script></body></html>

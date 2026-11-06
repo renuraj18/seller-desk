@@ -20,6 +20,7 @@ class AccountIn(BaseModel):
     marketplace: Literal["amazon", "flipkart", "meesho"]
     name: str
     seller_id: str | None = None
+    store_name: str | None = None
     brand: str | None = None
     sku_prefix: str | None = ""
     price_markup_pct: float = 0
@@ -75,16 +76,16 @@ def list_accounts():
 
 
 def _save_account(c, a: AccountIn, account_id: int | None = None):
-    vals = (a.firm_id, a.marketplace, a.name, a.seller_id, a.brand, a.sku_prefix or "", a.price_markup_pct,
+    vals = (a.firm_id, a.marketplace, a.name, a.seller_id, a.store_name, a.brand, a.sku_prefix or "", a.price_markup_pct,
             a.price_add, a.price_round_to, int(a.active), a.notes)
     try:
         if account_id:
-            c.execute("UPDATE accounts SET firm_id=?, marketplace=?, name=?, seller_id=?, brand=?, sku_prefix=?, "
+            c.execute("UPDATE accounts SET firm_id=?, marketplace=?, name=?, seller_id=?, store_name=?, brand=?, sku_prefix=?, "
                       "price_markup_pct=?, price_add=?, price_round_to=?, active=?, notes=? WHERE id=?",
                       (*vals, account_id))
             return account_id
-        cur = c.execute("INSERT INTO accounts (firm_id, marketplace, name, seller_id, brand, sku_prefix, "
-                        "price_markup_pct, price_add, price_round_to, active, notes) VALUES (?,?,?,?,?,?,?,?,?,?,?)",
+        cur = c.execute("INSERT INTO accounts (firm_id, marketplace, name, seller_id, store_name, brand, sku_prefix, "
+                        "price_markup_pct, price_add, price_round_to, active, notes) VALUES (?,?,?,?,?,?,?,?,?,?,?,?)",
                         vals)
         return cur.lastrowid
     except Exception as e:

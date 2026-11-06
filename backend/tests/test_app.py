@@ -355,3 +355,114 @@ def test_amazon_client_requires_credentials():
 def test_dashboard(client):
     d = client.get("/api/dashboard").json()
     assert d["firms"] == 2 and d["accounts"] == 3 and d["products"] >= 2
+
+
+# ---------------------------------------------------------------- variants, photos, inventory
+
+def _png() -> bytes:
+    from PIL import Image
+    buf = io.BytesIO()
+    Image.new("RGB", (40, 50), (120, 20, 40)).save(buf, "PNG")
+    return buf.getvalue()
+
+
+def test_media_upload_and_folder_import(client, setup_data):
+    up = client.post("/api/media", files=[("files", ("maroon-1.png", _png(), "image/png")),
+                                          ("files", ("notes.txt", b"x", "text/plain"))]).json()
+    assert len(up) == 1 and up[0]["url"].startswith("/media/")
+    assert client.get(up[0]["url"]).status_code == 200
+    r = client.post("/api/products/import-designs", json={
+        "account_ids": [setup_data["meesho"]["id"]],
+        "designs": [{"parent_sku": "KB-77", "attributes": {"fabric": "Kanjivaram Silk", "selling_price": 2999, "mrp": 5999},
+                     "variants": [{"sku": "KB-77-MAROON", "color": "Maroon", "images": [up[0]["url"]], "stock_qty": 4,
+                                   "attributes": {"pattern": "Zari Woven"}},
+                                  {"sku": "KB-77-GREEN", "color": "Green", "images": [], "stock_qty": 2}]}]}).json()
+    assert r["created"] == 2
+    prods = client.get("/api/products", params={"q": "KB-77"}).json()
+    assert {p["parent_sku"] for p in prods} == {"KB-77"} and {p["color"] for p in prods} == {"Maroon", "Green"}
+    maroon = next(p for p in prods if p["color"] == "Maroon")
+    assert maroon["pattern"] == "Zari Woven" and maroon["fabric"] == "Kanjivaram Silk"
+    # extension: both variants come back as one group, and the local photo is served by the image proxy
+    grp = client.get("/api/ext/payload-group", params={"product_id": maroon["id"], "account_id": setup_data["meesho"]["id"]}).json()
+    assert [g["values"]["product.color"] for g in grp] == ["Green", "Maroon"]
+    assert grp[1]["values"]["listing.parent_sku"] == "KB-77"
+    img = client.get("/api/ext/image", params={"url": up[0]["url"]})
+    assert img.status_code == 200 and img.headers["content-type"] == "image/png"
+
+
+def test_add_colour_variants(client, setup_data):
+    pid = setup_data["product"]["id"]
+    r = client.post(f"/api/products/{pid}/variants", json={"colors": ["Bottle Green", "Navy"]}).json()
+    assert r == {"created": 2, "parent_sku": "KS-001"}
+    vs = client.get(f"/api/products/{pid}/variants").json()
+    assert sorted(v["sku"] for v in vs) == ["KS-001", "KS-001-BOTTLEGREE", "KS-001-NAVY"]
+    assert all(v["fabric"] == "Kanjivaram Silk" for v in vs)
+
+
+def test_add_to_accounts_includes_variants(client, setup_data):
+    r = client.post("/api/listings/add-to-accounts", json={
+        "product_ids": [setup_data["product"]["id"]], "account_ids": [setup_data["flipkart"]["id"]]}).json()
+    assert r["products"] == 3 and r["added"] == 3
+
+
+def test_inventory_and_stock_from_extension(client, setup_data):
+    aid = setup_data["amazon"]["id"]
+    st = client.get("/api/ext/stock", params={"account_id": aid}).json()
+    ks = next(r for r in st if r["sku"] == "KS-001")
+    assert ks["account_sku"] == "A1-KS-001"
+    seen = client.post("/api/ext/stock-seen", json={"account_id": aid, "rows": [
+        {"key": "A1-KS-001", "stock": 2}, {"key": "NOT-OURS", "stock": 9}]}).json()
+    assert seen == {"updated": 1, "unknown": ["NOT-OURS"]}
+    client.post("/api/inventory/stock", json=[{"product_id": setup_data["product"]["id"], "delta": -3}])
+    inv = client.get("/api/inventory").json()
+    p = next(x for x in inv["products"] if x["sku"] == "KS-001")
+    acc_stock = p["accounts"].get(str(aid)) or p["accounts"].get(aid)
+    assert p["stock_qty"] == 7 and acc_stock["stock"] == 2
+    assert inv["out_of_sync"] >= 1
+
+
+# ---------------------------------------------------------------- orders
+
+def test_status_rules():
+    from app.services.orders import normalise_status as n
+    assert n("RTO Delivered") == "courier_return" and n("Return to origin") == "courier_return"
+    assert n("Customer Return completed") == "customer_return" and n("Cancelled by supplier") == "cancelled"
+    assert n("Out for delivery") == "shipped" and n("Delivered") == "delivered" and n("Ready to ship") == "pending"
+
+
+def test_orders_capture_import_and_master_excel(client, setup_data):
+    mid = setup_data["meesho"]["id"]
+    skus = client.get("/api/ext/known-skus", params={"account_id": mid}).json()
+    assert "KS-001" in skus
+    r = client.post("/api/ext/orders-seen", json={"account_id": mid, "page_status": "Shipped", "rows": [
+        {"order_id": "214567890", "sub_order_id": "214567890_1", "sku": "KS-001", "order_date": "04 Nov 2026"},
+        {"order_id": "214567891", "sub_order_id": "214567891_1", "status_text": "RTO Delivered"}]}).json()
+    assert r["created"] == 2 and r["master_saved"].endswith(".xlsx")
+    # an older page saying "Shipped" must not undo the RTO
+    client.post("/api/ext/orders-seen", json={"account_id": mid, "page_status": "Shipped",
+                                               "rows": [{"order_id": "214567891", "sub_order_id": "214567891_1"}]})
+    # Meesho payments-style file adds cancellation charges + a cancelled order
+    wb = openpyxl.Workbook()
+    ws = wb.active
+    ws.append(["Payments to date"])
+    ws.append(["Sub Order No", "Order Date", "SKU", "Live Order Status", "Cancellation Charges", "Return Shipping Charge"])
+    ws.append(["214567892_1", "02-11-2026", "KS-001", "Cancelled", "-35.4", ""])
+    ws.append(["214567891_1", "03-11-2026", "", "RTO", "", "-62"])
+    buf = io.BytesIO()
+    wb.save(buf)
+    imp = client.post(f"/api/accounts/{mid}/orders-file", files={"file": ("payments.xlsx", buf.getvalue())}).json()
+    assert imp["rows"] == 2 and imp["created"] == 1 and imp["updated"] == 1
+    data = client.get("/api/orders", params={"account_id": mid}).json()
+    by = {o["sub_order_id"]: o for o in data["orders"]}
+    assert by["214567890_1"]["status"] == "shipped" and by["214567890_1"]["order_date"] == "2026-11-04"
+    assert by["214567890_1"]["mrp"] == 4999                  # MRP from the product via SKU
+    assert by["214567891_1"]["status"] == "courier_return" and by["214567891_1"]["return_charges"] == 62
+    assert by["214567892_1"]["status"] == "cancelled" and by["214567892_1"]["cancel_charges"] == 35.4
+    assert by["214567892_1"]["order_id"] == "214567892" and by["214567892_1"]["firm_name"] == "Raj Textiles"
+    x = openpyxl.load_workbook(io.BytesIO(client.get("/api/orders/master.xlsx").content))
+    ws = x["Orders"]
+    assert [c.value for c in ws[1]][:6] == ["Order date", "Firm", "Platform", "Account", "Order ID", "Sub-order / item ID"]
+    statuses = {ws.cell(row=i, column=11).value for i in range(2, ws.max_row + 1)}
+    assert {"Shipped", "Courier return (RTO)", "Cancelled"} <= statuses
+    summary = x["Summary"]
+    assert summary["A2"].value == "Raj Textiles" and summary["B2"].value == "Meesho"

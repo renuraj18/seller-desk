@@ -77,13 +77,13 @@ export default function ProductEdit() {
               ))}</div>
             </div>
           ))}</div>
-          <div className="card" style={{ position: 'sticky', top: 16 }}>
+          <div style={{ position: 'sticky', top: 16 }}><div className="card">
             <h2>Preview</h2>
             {(p.images || []).filter(Boolean)[0] ? <img src={p.images.filter(Boolean)[0]} alt="" style={{ width: '100%', borderRadius: 8, marginBottom: 10 }} /> : <div className="empty small">No image</div>}
             <div className="small">Base price {money(p.selling_price)} · MRP {money(p.mrp)}</div>
             {margin !== null && <div className="small" style={{ marginTop: 4 }}>Gross margin before fees: <b>{money(margin)}</b></div>}
             <div className="small muted" style={{ marginTop: 8 }}>{(p.images || []).filter(Boolean).length} images · aim for 6+</div>
-          </div>
+          </div>{!isNew && <Variants productId={Number(id)} />}</div>
         </div>
       )}
       {MARKETPLACES.includes(tab as Marketplace) && <ContentEditor productId={Number(id)} marketplace={tab as Marketplace} />}
@@ -163,6 +163,34 @@ function ContentEditor({ productId, marketplace }: { productId: number; marketpl
         {data.keyword_set ? <div className="small"><b>{data.keyword_set.name}</b><div className="muted">Primary: {data.keyword_set.primary_keywords || '—'}</div></div>
           : <p className="small muted">No keyword set matches this saree's fabric or type. <Link to="/keywords">Add one</Link> for better SEO.</p>}
       </div>
+    </div>
+  )
+}
+
+function Variants({ productId }: { productId: number }) {
+  const { data, reload } = useLoad<Row[]>(() => api.get(`/api/products/${productId}/variants`), [productId])
+  const [colors, setColors] = useState('')
+  const nav = useNavigate()
+  const add = async () => {
+    try {
+      const r = await api.post(`/api/products/${productId}/variants`, { colors: colors.split(',') })
+      toast.ok(`${r.created} colour variant(s) created in group ${r.parent_sku}. Add their photos and stock.`)
+      setColors(''); reload()
+    } catch (e) { toast.err(e) }
+  }
+  return (
+    <div className="card">
+      <h2>Colour variants</h2>
+      {(data?.length || 0) > 1 ? data!.map((v) => (
+        <div key={v.id} className="row" style={{ padding: '4px 0', borderBottom: '1px solid var(--line)' }}>
+          <code style={{ cursor: 'pointer', fontWeight: v.id === productId ? 700 : 400 }} onClick={() => nav(`/products/${v.id}`)}>{v.sku}</code>
+          <span className="small">{v.color}</span><span className="spacer" /><span className="small muted">stock {v.stock_qty ?? '—'}</span>
+        </div>
+      )) : <p className="small muted">No variants yet.</p>}
+      <div className="field" style={{ marginTop: 10 }}><label>Add colours (comma separated)</label>
+        <input value={colors} placeholder="Green, Navy Blue, Mustard" onChange={(e) => setColors(e.target.value)} /></div>
+      <button disabled={!colors.trim()} onClick={add}>Create variants</button>
+      <p className="small muted" style={{ marginTop: 8 }}>Variants share this design's details. The extension lists them together as one catalog / variation family.</p>
     </div>
   )
 }

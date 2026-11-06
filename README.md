@@ -8,7 +8,14 @@ Listing manager for saree sellers on **Amazon.in, Flipkart and Meesho**. It hand
 - **Keyword sets** per saree type (Kanjivaram, Banarasi, cotton…) feed the drafts.
 - **Template filler**: upload the blank category template from each seller panel once. Seller Desk detects the header, maps the columns, reads the dropdown lists, fills rows for any account (SKU prefix, brand, price rule) and flags values that don't match a dropdown.
 - **Per-account pricing**: markup %, add ₹, round to …9.
-- Payments & P&L: next phase (database tables already exist).
+- **Browser extension** (`extension/`) for Meesho Supplier Panel, Flipkart Seller Hub and Amazon Seller Central. It detects the platform from the site and the logged-in account from its Seller ID or store name. It can:
+  - **List sarees**: fill the add-product form from Seller Desk (account SKU, price, brand, approved SEO text) and attach photos. A catalog with several colour sections gets one variant per section. Autopilot works through every saree queued for the account. Teach it unknown fields once, and that applies to all accounts.
+  - **Stock**: on a portal's inventory page, read every SKU's stock and set it to the master stock (optionally clicking each row's Save).
+  - **Orders**: on orders or returns pages, capture order IDs with status, date, SKU, amount and AWB into the master orders list.
+- **Colour variants**: create variants of a design, or import a photo folder (`Design/Colour/1.jpg`). Optionally Claude reads the photos to fill colour, pattern, work, border and pallu.
+- **Inventory**: one master stock per saree, compared against the last stock seen on every account.
+- **Orders & shipments**: one list for both firms and all portals, with status (pending, shipped, delivered, cancelled, courier return / RTO, customer return), MRP, and cancellation and return charges. It's kept as `data/orders_master.xlsx` (Orders + Summary sheets) and refreshed after every capture or import.
+- Payments & P&L: next phase.
 
 Everything runs on your own PC. Data and encrypted credentials stay in the `data/` folder.
 
@@ -34,6 +41,16 @@ Then open http://localhost:8000. The first run installs the Python packages into
 5. **SEO keywords**: add a keyword set for each saree type you sell.
 6. **Products**: complete attributes and images, select products → **AI draft listings** → review each marketplace tab → **Approve**.
 7. **Upload templates**: upload the blank saree template from each panel → check the mapping → **Fill** → upload the file in the seller panel.
+
+## Browser extension
+
+1. Seller Desk → **Browser extension** → *Download extension*, then unzip it into a folder you keep.
+2. Open `chrome://extensions`, turn on **Developer mode**, click **Load unpacked**, and pick the folder.
+3. Keep Seller Desk running. The extension's popup should say *Connected*.
+4. Try it on the practice pages first: `http://localhost:8000/ext-demo`, `/ext-demo-catalog`, `/ext-demo-inventory`, `/ext-demo-orders`.
+
+Tip: use one Chrome profile per firm so each stays logged in to its own portal accounts.
+The extension never submits a listing unless you turn on *Submit automatically* for autopilot.
 
 ## Backups and security
 
@@ -70,5 +87,7 @@ backend/app/
     template_filler.py   template analysis, dropdown reading, filling
     pricing.py           per-account price / SKU
     secrets.py           Fernet encryption of credentials and API key
+    orders.py            order statuses, report import, master Excel
+extension/               Chrome extension (engine.js = form/stock/order engine, content.js = panel)
 frontend/src/            React + TypeScript screens
 ```

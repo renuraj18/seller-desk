@@ -1,0 +1,19 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><title>Practice – Orders</title>
+<style>
+ body{font-family:system-ui,sans-serif;background:#f4f5f7;margin:0;color:#222} header{background:#570a57;color:#fff;padding:14px 24px;font-weight:600}
+ main{max-width:900px;margin:24px auto} .note{background:#fff6d8;border:1px solid #f0dc9a;padding:10px 12px;border-radius:8px;font-size:13px;margin-bottom:16px}
+ .tabs{display:flex;gap:6px;margin-bottom:12px} .tabs div{padding:8px 14px;border-radius:8px;background:#fff;border:1px solid #ddd;font-size:14px}
+ .tabs .active{background:#570a57;color:#fff}
+ .card{background:#fff;border-radius:10px;padding:14px 16px;margin-bottom:10px;display:grid;grid-template-columns:1fr 1fr 1fr;gap:6px;font-size:14px}
+ .k{color:#888;font-size:12px}
+</style></head><body>
+<header>Practice seller panel · Orders</header>
+<main>
+ <div class="note">Practice orders page. Open Seller Desk → <b>Orders</b> → <b>Capture orders on this page</b>.</div>
+ <div class="tabs"><div role="tab">Pending</div><div role="tab" aria-selected="true" class="active">Shipped</div><div role="tab">Cancelled</div><div role="tab">Returns</div></div>
+ <div class="card"><div><div class="k">Sub Order ID</div>214567890_1</div><div><div class="k">SKU</div>RT-KS-001</div><div><div class="k">Order date</div>04 Nov 2026</div><div>₹2,499</div><div><div class="k">AWB</div>AWB: SF1234567890</div></div>
+ <div class="card"><div><div class="k">Sub Order ID</div>214567891_1</div><div><div class="k">SKU</div>RT-BN-101</div><div><div class="k">Order date</div>03 Nov 2026</div><div>₹1,299</div><div>RTO Delivered</div></div>
+ <div class="card"><div><div class="k">Sub Order ID</div>214567892_1</div><div><div class="k">SKU</div>RT-CT-220</div><div><div class="k">Order date</div>02 Nov 2026</div><div>₹1,299</div><div>Cancelled by supplier</div></div>
+ <div class="card"><div><div class="k">Sub Order ID</div>214567893_2</div><div><div class="k">SKU</div>RT-KS-001</div><div><div class="k">Order date</div>01 Nov 2026</div><div>₹2,499</div><div>Customer Return completed</div></div>
+</main></body></html>

@@ -84,7 +84,10 @@ export default function Setup() {
             <div className="field"><label>Marketplace</label><select value={acc.marketplace} onChange={(e) => setAcc({ ...acc, marketplace: e.target.value })}>
               {MARKETPLACES.map((m) => <option key={m} value={m}>{MP_LABEL[m]}</option>)}</select></div>
             <div className="field"><label>Account name</label><input value={acc.name} placeholder="e.g. Amazon – Shanthi Silks" onChange={(e) => setAcc({ ...acc, name: e.target.value })} /></div>
-            <div className="field"><label>Seller ID (optional)</label><input value={acc.seller_id || ''} onChange={(e) => setAcc({ ...acc, seller_id: e.target.value })} /></div>
+            <div className="field"><label>Seller / Supplier ID</label><input value={acc.seller_id || ''} onChange={(e) => setAcc({ ...acc, seller_id: e.target.value })} />
+              <div className="help">As shown in the seller panel. The extension uses it to detect which account is logged in.</div></div>
+            <div className="field"><label>Store / display name on the portal</label><input value={acc.store_name || ''} onChange={(e) => setAcc({ ...acc, store_name: e.target.value })} />
+              <div className="help">Also used for account detection.</div></div>
             <div className="field"><label>Brand on this account</label><input value={acc.brand || ''} onChange={(e) => setAcc({ ...acc, brand: e.target.value })} /></div>
             <div className="field"><label>SKU prefix</label><input value={acc.sku_prefix || ''} placeholder="e.g. SS-AMZ-" onChange={(e) => setAcc({ ...acc, sku_prefix: e.target.value })} />
               <div className="help">Added to the master SKU when this account has no SKU of its own.</div></div>

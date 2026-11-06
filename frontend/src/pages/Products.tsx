@@ -10,6 +10,7 @@ export default function Products() {
   const [aiOpen, setAiOpen] = useState(false)
   const [mps, setMps] = useState<Marketplace[]>(['amazon', 'flipkart', 'meesho'])
   const [running, setRunning] = useState(false)
+  const [addOpen, setAddOpen] = useState(false)
   const nav = useNavigate()
 
   const toggle = (id: number) => setSel((s) => { const n = new Set(s); n.has(id) ? n.delete(id) : n.add(id); return n })
@@ -39,6 +40,7 @@ export default function Products() {
         <a className="btn" href="/api/products/import-template">Download import sheet</a>
         <FileButton label="Import Excel / CSV" accept=".xlsx,.csv" onFile={importFile} />
         <a className="btn" href="/api/products/export">Export all</a>
+        <button onClick={() => nav('/products/import-folder')}>Import photo folder</button>
         <button className="primary" onClick={() => nav('/products/new')}>Add saree</button>
       </PageHead>
       <div className="row" style={{ marginBottom: 12 }}>
@@ -46,7 +48,8 @@ export default function Products() {
         <span className="spacer" />
         {sel.size > 0 && <>
           <span className="muted">{sel.size} selected</span>
-          <button className="primary" onClick={() => setAiOpen(true)}>✨ AI draft listings</button>
+          <button className="primary" onClick={() => setAddOpen(true)}>Add to accounts</button>
+          <button onClick={() => setAiOpen(true)}>✨ AI draft listings</button>
           <button onClick={() => nav(`/templates?products=${[...sel].join(',')}`)}>Fill a template</button>
         </>}
       </div>
@@ -59,7 +62,7 @@ export default function Products() {
               <td onClick={(e) => e.stopPropagation()}><input type="checkbox" checked={sel.has(p.id)} onChange={() => toggle(p.id)} /></td>
               <td>{p.images?.[0] ? <img className="thumb" src={p.images[0]} alt="" /> : <div className="thumb" />}</td>
               <td><code>{p.sku}</code></td>
-              <td>{[p.saree_type, p.fabric].filter(Boolean).join(' · ') || <span className="muted">—</span>}<div className="muted small">{p.name}</div></td>
+              <td>{[p.saree_type, p.fabric].filter(Boolean).join(' · ') || <span className="muted">—</span>}<div className="muted small">{p.name}{p.parent_sku && <span className="pill" style={{ marginLeft: 6 }}>group {p.parent_sku}</span>}</div></td>
               <td>{p.color || '—'}</td>
               <td className="num">{money(p.mrp)}</td><td className="num">{money(p.selling_price)}</td><td className="num">{money(p.cost_price)}</td>
               <td className="num">{p.stock_qty ?? '—'}</td><td className="num">{p.listing_count}</td>
@@ -67,6 +70,7 @@ export default function Products() {
           ))}</tbody>
         </table></div>
       )}
+      {addOpen && <AddToAccounts productIds={[...sel]} onClose={(n) => { setAddOpen(false); if (n !== undefined) { setSel(new Set()); reload() } }} />}
       {aiOpen && (
         <Modal title={`AI draft for ${sel.size} product(s)`} onClose={() => !running && setAiOpen(false)}>
           <p className="small">Claude writes the title, highlights, bullets, description and keywords. It uses only your product data and the matching SEO keyword set. Marketplace limits are applied afterwards. Drafts you have approved are not overwritten.</p>
@@ -80,5 +84,36 @@ export default function Products() {
         </Modal>
       )}
     </>
+  )
+}
+
+function AddToAccounts({ productIds, onClose }: { productIds: number[]; onClose: (added?: number) => void }) {
+  const accounts = useLoad<Row[]>(() => api.get('/api/accounts'))
+  const [chosen, setChosen] = useState<Set<number>>(new Set())
+  const firms = [...new Set((accounts.data || []).map((a) => a.firm_name))]
+  const save = async () => {
+    try {
+      const r = await api.post('/api/listings/add-to-accounts', { product_ids: productIds, account_ids: [...chosen] })
+      toast.ok(`${r.added} listing(s) queued (${r.products} sarees incl. colour variants). Open the extension on each portal to list them.`)
+      onClose(r.added)
+    } catch (e) { toast.err(e) }
+  }
+  return (
+    <Modal title={`Add ${productIds.length} saree(s) to accounts`} onClose={() => onClose()}>
+      <p className="small muted">They appear under <b>To list</b> in the browser extension for each account. Colour variants of the same design are included automatically.</p>
+      {firms.map((f) => (
+        <div key={f} style={{ marginBottom: 10 }}>
+          <div className="row" style={{ marginBottom: 4 }}><b>{f}</b><span className="spacer" />
+            <button className="ghost small" onClick={() => setChosen(new Set([...chosen, ...accounts.data!.filter((a) => a.firm_name === f).map((a) => a.id)]))}>all</button></div>
+          {accounts.data!.filter((a) => a.firm_name === f).map((a) => (
+            <label key={a.id} className="row" style={{ color: 'var(--ink)', fontSize: 14, margin: '4px 0' }}>
+              <input type="checkbox" checked={chosen.has(a.id)} onChange={() => { const n = new Set(chosen); n.has(a.id) ? n.delete(a.id) : n.add(a.id); setChosen(n) }} />
+              {MP_LABEL[a.marketplace as Marketplace]} · {a.name}</label>
+          ))}
+        </div>
+      ))}
+      <div className="row"><button className="ghost" onClick={() => setChosen(new Set((accounts.data || []).map((a) => a.id)))}>Select all {accounts.data?.length ?? ''}</button><span className="spacer" />
+        <button onClick={() => onClose()}>Cancel</button><button className="primary" disabled={!chosen.size} onClick={save}>Add to {chosen.size} account(s)</button></div>
+    </Modal>
   )
 }

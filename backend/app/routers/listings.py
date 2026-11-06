@@ -122,3 +122,71 @@ def dashboard():
                                      "OR mrp IS NULL OR selling_price IS NULL OR hsn IS NULL OR images='[]'"),
             "by_account": accounts,
         }
+
+
+# ------------------------------------------------------------------ inventory (master stock vs every account)
+
+class StockChange(BaseModel):
+    product_id: int
+    stock_qty: int | None = None   # set to this
+    delta: int | None = None       # or add/subtract this (e.g. -1 after a sale)
+
+
+@router.get("/inventory")
+def inventory():
+    with get_conn() as c:
+        products = rows_to_dicts(c.execute(
+            "SELECT id, sku, parent_sku, name, fabric, color, saree_type, stock_qty, images FROM products "
+            "ORDER BY COALESCE(parent_sku, sku), sku"))
+        accounts = rows_to_dicts(c.execute(
+            "SELECT a.id, a.name, a.marketplace, f.name AS firm_name FROM accounts a JOIN firms f ON f.id=a.firm_id "
+            "WHERE a.active=1 ORDER BY f.name, a.marketplace, a.name"))
+        listings = rows_to_dicts(c.execute("SELECT product_id, account_id, stock_qty, status FROM listings"))
+    by = {(l["product_id"], l["account_id"]): l for l in listings}
+    out_of_sync = 0
+    for p in products:
+        p["image"] = (p.pop("images") or [None])[0]
+        p["accounts"] = {}
+        for a in accounts:
+            l = by.get((p["id"], a["id"]))
+            if l:
+                p["accounts"][a["id"]] = {"stock": l["stock_qty"], "status": l["status"]}
+                if p["stock_qty"] is not None and l["stock_qty"] != p["stock_qty"] and l["status"] != "draft":
+                    out_of_sync += 1
+    return {"products": products, "accounts": accounts, "out_of_sync": out_of_sync}
+
+
+@router.post("/inventory/stock")
+def change_stock(changes: list[StockChange]):
+    with get_conn() as c:
+        for ch in changes:
+            if ch.stock_qty is not None:
+                c.execute("UPDATE products SET stock_qty=?, updated_at=datetime('now') WHERE id=?",
+                          (max(0, ch.stock_qty), ch.product_id))
+            elif ch.delta:
+                c.execute("UPDATE products SET stock_qty=MAX(0, COALESCE(stock_qty,0)+?), updated_at=datetime('now') "
+                          "WHERE id=?", (ch.delta, ch.product_id))
+    return {"updated": len(changes)}
+
+
+class MultiAdd(BaseModel):
+    product_ids: list[int]
+    account_ids: list[int]
+
+
+@router.post("/listings/add-to-accounts")
+def add_to_accounts(b: MultiAdd):
+    """Queue sarees (draft listings) on several accounts at once; variants of a design come along."""
+    with get_conn() as c:
+        ids = set(b.product_ids)
+        parents = [r["parent_sku"] for r in c.execute(
+            f"SELECT DISTINCT parent_sku FROM products WHERE parent_sku IS NOT NULL AND id IN ({','.join('?' * len(ids))})",
+            tuple(ids))] if ids else []
+        for parent in parents:
+            ids |= {r["id"] for r in c.execute("SELECT id FROM products WHERE parent_sku=?", (parent,))}
+        added = 0
+        for aid in b.account_ids:
+            for pid in ids:
+                added += c.execute("INSERT OR IGNORE INTO listings (product_id, account_id) VALUES (?,?)",
+                                   (pid, aid)).rowcount
+    return {"added": added, "products": len(ids)}

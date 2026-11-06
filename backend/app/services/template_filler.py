@@ -235,6 +235,9 @@ def resolve_value(source: str, const_value, product: dict, account: dict, listin
         return generated.get(key)
     if source == "listing.sku":
         return account_sku(product, account, listing)
+    if source == "listing.parent_sku":
+        parent = product.get("parent_sku")
+        return f"{account.get('sku_prefix') or ''}{parent}" if parent else None
     if source in ("listing.price", "listing.return_price"):
         return _fmt_number(account_price(product, account, listing))
     if source == "listing.mrp":

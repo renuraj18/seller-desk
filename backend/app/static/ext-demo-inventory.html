@@ -1,0 +1,21 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><title>Practice – Inventory</title>
+<style>
+ body{font-family:system-ui,sans-serif;background:#f4f5f7;margin:0;color:#222} header{background:#570a57;color:#fff;padding:14px 24px;font-weight:600}
+ main{max-width:900px;margin:24px auto;background:#fff;border-radius:10px;padding:20px 24px}
+ .note{background:#fff6d8;border:1px solid #f0dc9a;padding:10px 12px;border-radius:8px;font-size:13px;margin-bottom:16px}
+ table{width:100%;border-collapse:collapse} th,td{padding:10px;border-bottom:1px solid #eee;text-align:left;font-size:14px} th{font-size:12px;color:#777}
+ input{width:80px;padding:6px;border:1px solid #ccc;border-radius:6px} button{padding:6px 12px;border-radius:6px;border:1px solid #570a57;background:#fff;color:#570a57;cursor:pointer}
+ .saved{color:#2f7d4f;font-size:12px;margin-left:6px}
+</style></head><body>
+<header>Practice seller panel · Inventory</header>
+<main>
+ <div class="note">Practice inventory page. Open Seller Desk (bottom right) → <b>Stock</b> → <b>Sync stock on this page</b>.</div>
+ <table><thead><tr><th>Product</th><th>SKU ID</th><th>Price</th><th>Current Stock</th><th></th></tr></thead><tbody id="rows"></tbody></table>
+</main>
+<script>
+ const data=[['Kanjivaram saree maroon','RT-KS-001',2499,3],['Banarasi saree red','RT-BN-101',1299,12],['Chanderi cotton mustard','RT-CT-220',1299,0],['Old design','RT-OLD-9',999,5]]
+ window.__saved={}
+ document.getElementById('rows').innerHTML=data.map(([n,s,p,q])=>`<tr><td>${n}</td><td>${s}</td><td>₹${p}</td><td><input type="number" value="${q}" data-sku="${s}"></td><td><button data-sku="${s}">Update</button><span class="saved"></span></td></tr>`).join('')
+ document.querySelectorAll('button[data-sku]').forEach(b=>b.addEventListener('click',()=>{const i=document.querySelector(`input[data-sku="${b.dataset.sku}"]`);window.__saved[b.dataset.sku]=Number(i.value);b.nextElementSibling.textContent='Saved ✓'}))
+</script></body></html>

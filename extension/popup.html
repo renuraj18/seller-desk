@@ -1,0 +1,32 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<style>
+  body { width: 290px; margin: 0; font: 13px Inter, "Segoe UI", system-ui, sans-serif; color: #1f1a17; }
+  header { background: #2a1a1d; color: #fff; padding: 10px 12px; font-weight: 700; }
+  main { padding: 12px; }
+  label { display: block; font-size: 11px; color: #7a6f66; font-weight: 600; margin-bottom: 4px; }
+  input { width: 100%; box-sizing: border-box; border: 1px solid #e0d6cb; border-radius: 8px; padding: 7px 9px; font: inherit; }
+  button { margin-top: 8px; background: #7a1f2b; color: #fff; border: 0; border-radius: 8px; padding: 7px 12px; font: inherit; cursor: pointer; }
+  .st { margin: 10px 0 0; font-size: 12px; }
+  .ok { color: #2f7d4f; } .bad { color: #b42318; }
+  ul { padding-left: 18px; margin: 10px 0 0; color: #5b4f46; font-size: 12px; line-height: 1.5; }
+</style>
+</head>
+<body>
+<header>Seller Desk</header>
+<main>
+  <label for="url">Seller Desk address on this PC</label>
+  <input id="url" placeholder="http://localhost:8000">
+  <button id="save">Save &amp; check</button>
+  <p class="st" id="status">Checking…</p>
+  <ul>
+    <li>Open the add-product page on Meesho, Flipkart or Amazon Seller Central.</li>
+    <li>Use the <b>Seller Desk</b> button at the bottom right of the page.</li>
+    <li>Try it first on the practice form: <a href="#" id="demo">open practice form</a>.</li>
+  </ul>
+</main>
+<script src="popup.js"></script>
+</body>
+</html>
