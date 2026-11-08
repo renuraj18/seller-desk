@@ -46,6 +46,7 @@ def init_db():
 MIGRATIONS = [
     ("accounts", "store_name", "TEXT"),
     ("firms", "pincode", "TEXT"),
+    ("accounts", "return_price_less", "REAL DEFAULT 30"),
     ("orders", "status_text", "TEXT"),
     ("orders", "cancel_charges", "REAL"),
     ("orders", "return_charges", "REAL"),

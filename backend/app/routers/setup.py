@@ -27,6 +27,7 @@ class AccountIn(BaseModel):
     price_markup_pct: float = 0
     price_add: float = 0
     price_round_to: int = 0
+    return_price_less: float = 30
     active: bool = True
     notes: str | None = None
 
@@ -78,15 +79,15 @@ def list_accounts():
 
 def _save_account(c, a: AccountIn, account_id: int | None = None):
     vals = (a.firm_id, a.marketplace, a.name, a.seller_id, a.store_name, a.brand, a.sku_prefix or "", a.price_markup_pct,
-            a.price_add, a.price_round_to, int(a.active), a.notes)
+            a.price_add, a.price_round_to, a.return_price_less, int(a.active), a.notes)
     try:
         if account_id:
             c.execute("UPDATE accounts SET firm_id=?, marketplace=?, name=?, seller_id=?, store_name=?, brand=?, sku_prefix=?, "
-                      "price_markup_pct=?, price_add=?, price_round_to=?, active=?, notes=? WHERE id=?",
+                      "price_markup_pct=?, price_add=?, price_round_to=?, return_price_less=?, active=?, notes=? WHERE id=?",
                       (*vals, account_id))
             return account_id
         cur = c.execute("INSERT INTO accounts (firm_id, marketplace, name, seller_id, store_name, brand, sku_prefix, "
-                        "price_markup_pct, price_add, price_round_to, active, notes) VALUES (?,?,?,?,?,?,?,?,?,?,?,?)",
+                        "price_markup_pct, price_add, price_round_to, return_price_less, active, notes) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)",
                         vals)
         return cur.lastrowid
     except Exception as e:

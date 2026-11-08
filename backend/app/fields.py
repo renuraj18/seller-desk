@@ -131,7 +131,7 @@ EXTRA_SOURCES = [
     dict(key="listing.price", label="Account selling price", group="Account",
          synonyms=["standard_price", "your price", "your selling price", "selling price", "meesho price",
                    "price", "purchasable offer"]),
-    dict(key="listing.return_price", label="Wrong/defective return price (= selling price)", group="Account",
+    dict(key="listing.return_price", label="Wrong/defective return price (selling price − account offset)", group="Account",
          synonyms=["wrong/defective returns price", "wrong defective returns price", "returns price"]),
     dict(key="listing.mrp", label="Account MRP", group="Account", synonyms=[]),
     dict(key="listing.stock", label="Account stock", group="Account", synonyms=[]),

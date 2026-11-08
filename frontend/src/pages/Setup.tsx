@@ -2,7 +2,7 @@ import { useState } from 'react'
 import { api, MARKETPLACES, MP_LABEL, type Row } from '../api'
 import { Empty, Modal, MpBadge, PageHead, toast, useLoad } from '../components/ui'
 
-const emptyAccount = { firm_id: 0, marketplace: 'amazon', name: '', seller_id: '', brand: '', sku_prefix: '', price_markup_pct: 0, price_add: 0, price_round_to: 0, active: true, notes: '' }
+const emptyAccount = { firm_id: 0, marketplace: 'amazon', name: '', seller_id: '', brand: '', sku_prefix: '', price_markup_pct: 0, price_add: 0, price_round_to: 0, return_price_less: 30, active: true, notes: '' }
 
 export default function Setup() {
   const firms = useLoad<Row[]>(() => api.get('/api/firms'))
@@ -19,7 +19,7 @@ export default function Setup() {
   }
   const saveAcc = async () => {
     try {
-      const body = { ...acc, price_markup_pct: Number(acc!.price_markup_pct) || 0, price_add: Number(acc!.price_add) || 0, price_round_to: Number(acc!.price_round_to) || 0 }
+      const body = { ...acc, price_markup_pct: Number(acc!.price_markup_pct) || 0, price_add: Number(acc!.price_add) || 0, price_round_to: Number(acc!.price_round_to) || 0, return_price_less: acc!.return_price_less === '' || acc!.return_price_less == null ? 30 : Number(acc!.return_price_less) }
       if (acc!.id) await api.put(`/api/accounts/${acc!.id}`, body)
       else await api.post('/api/accounts', body)
       setAcc(null); accounts.reload(); firms.reload(); toast.ok('Account saved')
@@ -96,6 +96,8 @@ export default function Setup() {
             <div className="field"><label>Add ₹ (e.g. for shipping)</label><input type="number" value={acc.price_add} onChange={(e) => setAcc({ ...acc, price_add: e.target.value })} /></div>
             <div className="field"><label>Rounding</label><select value={acc.price_round_to} onChange={(e) => setAcc({ ...acc, price_round_to: Number(e.target.value) })}>
               <option value={0}>None</option><option value={9}>End in 9 (₹1,249)</option><option value={10}>Nearest ₹10 up</option><option value={50}>Nearest ₹50 up</option></select></div>
+            <div className="field"><label>Wrong/defective returns price: ₹ less than selling price</label><input type="number" value={acc.return_price_less ?? 30} onChange={(e) => setAcc({ ...acc, return_price_less: e.target.value })} />
+              <div className="help">Meesho's "Wrong/Defective Returns Price" = selling price minus this (e.g. ₹899 → ₹869).</div></div>
           </div>
           <div className="row"><span className="spacer" /><button onClick={() => setAcc(null)}>Cancel</button><button className="primary" disabled={!acc.name} onClick={saveAcc}>Save</button></div>
         </Modal>

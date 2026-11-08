@@ -245,8 +245,16 @@ def resolve_value(source: str, const_value, product: dict, account: dict, listin
     if source == "listing.parent_sku":
         parent = product.get("parent_sku")
         return f"{account.get('sku_prefix') or ''}{parent}" if parent else None
-    if source in ("listing.price", "listing.return_price"):
+    if source == "listing.price":
         return _fmt_number(account_price(product, account, listing))
+    if source == "listing.return_price":
+        # Meesho "Wrong/Defective Returns Price": selling price minus the account's offset (default ₹30)
+        price = account_price(product, account, listing)
+        if price is None:
+            return None
+        less = account.get("return_price_less")
+        less = 30 if less is None else less
+        return _fmt_number(max(0.0, float(price) - float(less)))
     if source == "listing.mrp":
         return _fmt_number((listing or {}).get("mrp") or product.get("mrp"))
     if source == "listing.stock":

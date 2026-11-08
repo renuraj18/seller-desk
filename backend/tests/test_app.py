@@ -244,7 +244,7 @@ def test_meesho_template_skips_instruction_row_and_snaps_dropdowns(client, setup
         "account_id": setup_data["meesho"]["id"], "product_ids": [setup_data["product"]["id"]]}).json()
     ws = openpyxl.load_workbook(io.BytesIO(client.get(f"/api/exports/{exp['export_id']}/download").content))["Saree"]
     assert ws["A3"].value.startswith("Maroon")         # AI draft for meesho from earlier test
-    assert ws["B3"].value == "Free Size" and ws["C3"].value == 2499 and ws["D3"].value == 2499
+    assert ws["B3"].value == "Free Size" and ws["C3"].value == 2499 and ws["D3"].value == 2469   # returns price = price - 30
     assert str(ws["F3"].value) == "5" and ws["J3"].value == "Kanjivaram Silk"
     assert ws["K3"].value == "Separate Blouse Piece"
     assert ws["A2"].value.startswith("This field")     # instruction row untouched
