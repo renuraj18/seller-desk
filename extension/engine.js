@@ -253,6 +253,7 @@
     'offwhite': ['cream', 'white'],
     'multicolour': ['multicolor'], 'multicolor': ['multicolour'],
     'grey': ['gray'], 'gray': ['grey'],
+    'saree': ['sarees'], 'sarees': ['saree'],
     '1': ['single', 'packof1', 'one'],
     'drycleanonly': ['dryclean'], 'handwash': ['handwashonly'],
     'artsilk': ['artsilksilkblend', 'silkblend'],
