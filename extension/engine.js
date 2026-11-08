@@ -159,7 +159,35 @@
       if (t && t.length <= 80) return t
       if (t) break
     }
+    const above = headerAbove(host || el)
+    if (above) return above
     return clean(el.getAttribute('placeholder') || el.getAttribute('name') || el.getAttribute('title') || '')
+  }
+
+  /** Grids built from divs (e.g. Meesho's price table): use the nearest short text directly above the field. */
+  function headerAbove(el) {
+    const r = el.getBoundingClientRect()
+    if (!r.width) return ''
+    const cx = r.left + r.width / 2
+    let best = ''; let bestGap = 220
+    const tw = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT)
+    for (let n = tw.nextNode(); n; n = tw.nextNode()) {
+      const t = clean(n.textContent)
+      if (!t || t.length > 50 || !/[a-z]/i.test(t)) continue
+      const p = n.parentElement
+      if (!p || inPanel(p) || p.closest('button, [role=option], [role=listbox], .MuiPopover-root, label')) continue
+      const pr = p.getBoundingClientRect()
+      if (!pr.width || pr.bottom > r.top + 2) continue
+      if (cx < pr.left - 8 || cx > pr.right + 8) continue
+      if (pr.right - pr.left > r.width * 3) continue          // a paragraph spanning the page is not a column title
+      const gap = r.top - pr.bottom
+      if (gap < bestGap) {
+        // nothing else (another control) in between
+        bestGap = gap
+        best = t
+      }
+    }
+    return best
   }
 
   function headerFor(cell) {
@@ -209,63 +237,143 @@
   }
 
   const numOf = (s) => String(s).replace(/[^0-9.]/g, '').replace(/\.0+$/, '')
+  const words = (s) => String(s ?? '').toLowerCase().replace(/[​-‍﻿]/g, '').split(/[^a-z0-9.]+/).filter(Boolean)
+  // spellings / names that differ between Seller Desk and marketplaces
+  const ALIASES = {
+    'unstitchedblousepiece': ['separateblousepiece', 'unstitchedblouse', 'blousepiece'],
+    'withblousepiece': ['separateblousepiece', 'runningblouse'],
+    'kanjivaram': ['kanjeevaram', 'kanchivaram', 'kanchipuram', 'kanjivaramsilk', 'kanchipuramsilk'],
+    'kanchivaram': ['kanjeevaram', 'kanjivaram', 'kanchipuram'],
+    'kanchipuram': ['kanjeevaram', 'kanjivaram', 'kanchivaram'],
+    'kanjivaramsilk': ['kanjeevaram', 'kanchipuramsilk', 'kanjivaram'],
+    'lavender': ['lavendar', 'lilac'],
+    'violet': ['purple', 'lavendar'],
+    'wine': ['maroon', 'burgundy'],
+    'navyblue': ['navy', 'blue'],
+    'offwhite': ['cream', 'white'],
+    'multicolour': ['multicolor'], 'multicolor': ['multicolour'],
+    'grey': ['gray'], 'gray': ['grey'],
+    '1': ['single', 'packof1', 'one'],
+    'drycleanonly': ['dryclean'], 'handwash': ['handwashonly'],
+    'artsilk': ['artsilksilkblend', 'silkblend'],
+  }
   function bestOption(options, value) {
     const v = normalise(value)
     if (!v) return null
-    const items = options.map((o) => ({ o, t: normalise(o.textContent || o.label || o.value) })).filter((x) => x.t)
-    return (items.find((x) => x.t === v) ||
-      items.find((x) => numOf(x.t) && numOf(x.t) === numOf(v) && /^[0-9.]+$/.test(numOf(v)) && x.t.replace(/[0-9.]/g, '').length < 6) ||
-      items.find((x) => x.t.startsWith(v) || v.startsWith(x.t)) ||
-      items.find((x) => x.t.includes(v) || (x.t.length > 3 && v.includes(x.t))))?.o || null
+    const items = options.map((o) => {
+      const text = clean(o.textContent || o.label || o.value)
+      return { o, t: normalise(text), w: words(text) }
+    }).filter((x) => x.t)
+    const exact = (key) => items.find((x) => x.t === key)
+    let hit = exact(v)
+    if (hit) return hit.o
+    for (const alt of ALIASES[v] || []) { hit = exact(alt); if (hit) return hit.o }
+    // numbers must match exactly ("1" never picks "Pack of 10"); allow units: 5 -> "5%", 5.5 -> "5.5 m"
+    if (/^[0-9.]+$/.test(v)) {
+      hit = items.find((x) => numOf(x.t) === numOf(v) && x.t.replace(/[0-9.]/g, '').length <= 7)
+      return hit ? hit.o : null
+    }
+    // whole-word matching: every word of the option must be a word of the value ("stitched" != "unstitched")
+    const vw = new Set(words(value))
+    const sub = items.filter((x) => x.w.length && x.w.every((w) => vw.has(w)))
+    if (sub.length) {
+      sub.sort((a, b) => b.w.length - a.w.length || words(value).indexOf(a.w[0]) - words(value).indexOf(b.w[0]))
+      return sub[0].o
+    }
+    // value words inside a longer option ("Maroon" -> "Maroon Red"): only when the value is a single word or two
+    if (vw.size <= 2) {
+      const sup = items.filter((x) => [...vw].every((w) => x.w.includes(w)))
+      if (sup.length) { sup.sort((a, b) => a.w.length - b.w.length); return sup[0].o }
+    }
+    return null
   }
 
-  const OPTION_SEL = '[role=option], [role=listbox] li, [role=menu] [role=menuitem], li[data-value], .dropdown-item, [class*="option" i]:not(select):not(option)'
-  function visibleOptions() {
-    return deepAll(document, OPTION_SEL).filter((o) => !inPanel(o) && visible(o) &&
+  const OPTION_SEL = '[role=option], [role=listbox] li, [role=menu] li, [role=menu] [role=menuitem], li[data-value], .dropdown-item'
+  const POPUP_SEL = '.MuiPopover-root, .MuiPopper-root, .MuiAutocomplete-popper, [role=listbox], [role=menu], [role=dialog], .ant-select-dropdown, .rc-virtual-list'
+  const popups = () => deepAll(document, POPUP_SEL).filter((p) => !inPanel(p) && visible(p))
+  function visibleOptions(scope) {
+    const root = scope || document
+    return deepAll(root, OPTION_SEL).filter((o) => !inPanel(o) && visible(o) &&
       (o.textContent || '').trim().length > 0 && (o.textContent || '').trim().length < 80)
   }
-
-  const searchBoxes = () => deepAll(document, 'input[type=search], input[placeholder*="earch" i], input[aria-autocomplete]')
+  /** Leaf text rows inside a popup that has no proper option elements (e.g. checkbox lists with Apply). */
+  function textOptions(pop) {
+    return [...pop.querySelectorAll('p, span, div, label')].filter((e) => {
+      if (!visible(e) || e.closest('button')) return false
+      const t = (e.textContent || '').trim()
+      return t && t.length < 60 && ![...e.children].some((c) => (c.textContent || '').trim() === t)
+    })
+  }
+  async function closePopups() {
+    for (let i = 0; i < 4; i++) {
+      const open = popups().filter((p) => p.matches('.MuiPopover-root, .MuiPopper-root, .MuiAutocomplete-popper, [role=listbox], [role=menu]'))
+      if (!open.length) return
+      document.activeElement?.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }))
+      for (const p of open) {
+        const bd = p.querySelector('.MuiBackdrop-root')
+        if (bd) realClick(bd)
+      }
+      if (i > 0) document.body.dispatchEvent(new MouseEvent('mousedown', { bubbles: true }))
+      await sleep(200)
+    }
+  }
+  const searchBoxes = (scope) => deepAll(scope || document, 'input[type=search], input[placeholder*="earch" i], input[aria-autocomplete]')
     .filter((i) => visible(i) && !inPanel(i))
+  const APPLY_RE = /^(apply|done|ok|save|select|confirm)$/i
 
   async function chooseFromList(trigger, value, typeInto) {
+    await closePopups()
+    const popsBefore = new Set(popups())
     const before = new Set(visibleOptions())
     const searchBefore = new Set(searchBoxes())
     trigger.focus?.()
     realClick(trigger)
     if (typeInto) typeText(typeInto, value)
-    let opts = await waitFor(() => {
-      const now = visibleOptions()
-      const fresh = now.filter((o) => !before.has(o))
-      return fresh.length ? fresh : (typeInto ? now : [])
-    }, 1500)
-    if (!opts.length) opts = visibleOptions()
+    // wait for the list (some lists load lazily)
+    let pop = null; let opts = []
+    const end = Date.now() + 3500
+    while (Date.now() < end) {
+      await sleep(120)
+      pop = popups().filter((p) => !popsBefore.has(p)).pop() || null
+      opts = pop ? visibleOptions(pop) : visibleOptions().filter((o) => !before.has(o))
+      if (!opts.length && typeInto) opts = visibleOptions()
+      if (opts.length || (pop && textOptions(pop).length && Date.now() > end - 2800)) break
+    }
+    // a search box inside the list narrows long lists (Meesho "Type" has ~90 entries)
     let pick = bestOption(opts, value)
     if (!pick && !typeInto) {
-      // some dropdowns open with their own search box: only use one that appeared with this dropdown
-      const own = searchBoxes().find((i) => !searchBefore.has(i))
+      const own = pop ? searchBoxes(pop)[0] : searchBoxes().find((i) => !searchBefore.has(i))
       if (own) {
-        typeText(own, value)
-        await sleep(400)
-        opts = visibleOptions()
-        pick = bestOption(opts, value)
+        // try the value, then its known alternative spellings (Kanjivaram -> Kanjeevaram)
+        for (const q of [String(value), ...(ALIASES[normalise(value)] || [])]) {
+          typeText(own, q)
+          await sleep(500)
+          opts = pop ? visibleOptions(pop) : visibleOptions()
+          pick = bestOption(opts, value)
+          if (pick) break
+        }
+        if (!pick) { typeText(own, ''); await sleep(300); opts = pop ? visibleOptions(pop) : visibleOptions() }
       }
+    }
+    // checkbox lists without option roles (Meesho "Size": Free Size + Apply)
+    let viaText = false
+    if (!pick && pop && !opts.length) {
+      const rows = textOptions(pop)
+      pick = bestOption(rows, value)
+      viaText = !!pick
+      if (!opts.length) opts = rows
     }
     if (pick) {
       pick.scrollIntoView?.({ block: 'nearest' })
-      realClick(pick)
-      await sleep(120)
+      realClick(viaText ? (pick.parentElement || pick) : pick)
+      await sleep(200)
+      const apply = pop && [...pop.querySelectorAll('button')].find((b) => APPLY_RE.test(b.textContent.trim()))
+      if (apply) { realClick(apply); await sleep(300) }
+      await closePopups()
       return { ok: true, chosen: clean(pick.textContent) }
     }
-    const sample = opts.slice(0, 12).map((o) => clean(o.textContent))
-    document.activeElement?.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }))
-    await sleep(50)
-    if (visibleOptions().some((o) => !before.has(o))) {
-      // still open: click outside, or toggle the trigger shut
-      document.body.dispatchEvent(new MouseEvent('mousedown', { bubbles: true }))
-      await sleep(50)
-      if (visibleOptions().some((o) => !before.has(o)) && !typeInto) realClick(trigger)
-    }
+    const sample = opts.slice(0, 12).map((o) => clean(o.textContent)).filter(Boolean)
+    await closePopups()
     if (typeInto) { typeInto.blur(); fire(typeInto, 'blur') }
     return { ok: false, reason: opts.length ? 'no matching option' : 'list did not open', options: sample }
   }
@@ -332,11 +440,12 @@
   }
 
   async function fill(payloadOrList, learned, opts = {}) {
-    clearMarks()
+    if (!opts._keepMarks) clearMarks()
     const payloads = Array.isArray(payloadOrList) ? payloadOrList : [payloadOrList]
     const results = []
     const used = new Set()
-    const fields = plan(learned)
+    let fields = plan(learned)
+    if (opts._only) fields = fields.filter((f) => opts._only.has(f.el))
     // a label that repeats on the page = one section per variant (e.g. Meesho catalog with several products)
     const seen = {}
     const total = {}
@@ -371,7 +480,17 @@
       }
       await sleep(opts.delay ?? 40)
     }
-    window.scrollTo({ top: 0, behavior: 'smooth' })
+    // fields that appeared because of earlier choices (e.g. Meesho's price table after Size)
+    if (!opts._second) {
+      await sleep(400)
+      const done = new Set(results.map((r) => r.el))
+      const fresh = plan(learned).filter((f) => !done.has(f.el))
+      if (fresh.length) {
+        const more = await fill(payloadOrList, learned, { ...opts, _second: true, _only: new Set(fresh.map((f) => f.el)), _keepMarks: true })
+        results.push(...more)
+      }
+    }
+    if (!opts._second) window.scrollTo({ top: 0, behavior: 'smooth' })
     return results
   }
 
@@ -382,6 +501,26 @@
     const r = await enter(el, kindOf(el), value)
     mark(el, r.ok)
     return r
+  }
+
+  // ------------------------------------------------------------- variant tabs (Meesho: Product 1, Product 2 …)
+  function productTabs() {
+    const out = []
+    const tw = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT)
+    for (let n = tw.nextNode(); n; n = tw.nextNode()) {
+      const m = n.textContent.trim().match(/^(product|variant|item)\s+(\d+)$/i)
+      if (!m || !n.parentElement || inPanel(n.parentElement) || !visible(n.parentElement)) continue
+      const tab = n.parentElement.closest('[role=tab], button, a, li') || n.parentElement.parentElement || n.parentElement
+      out[Number(m[2]) - 1] = tab
+    }
+    return out.filter(Boolean)
+  }
+  async function openProductTab(i) {
+    const tabs = productTabs()
+    if (!tabs[i]) return false
+    realClick(tabs[i])
+    await sleep(900)
+    return true
   }
 
   // ------------------------------------------------------------- images
@@ -609,5 +748,5 @@
     })
   }
 
-  globalThis.SDEngine = { scanOrders, activeTabText, scanStock, setStock, normalise, guess, setSynonyms, findControls, labelOf, kindOf, plan, fill, fillOne, attachImages, b64ToFile, pickField, clearMarks, HOST_ID }
+  globalThis.SDEngine = { productTabs, openProductTab, closePopups, bestOption, headerAbove, scanOrders, activeTabText, scanStock, setStock, normalise, guess, setSynonyms, findControls, labelOf, kindOf, plan, fill, fillOne, attachImages, b64ToFile, pickField, clearMarks, HOST_ID }
 })()

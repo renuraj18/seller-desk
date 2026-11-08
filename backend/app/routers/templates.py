@@ -137,7 +137,9 @@ def export(pid: int, body: ExportIn):
         raise HTTPException(400, "Select at least one product")
     with get_conn() as c:
         profile = _profile(c, pid)
-        account = row_to_dict(c.execute("SELECT * FROM accounts WHERE id=?", (body.account_id,)).fetchone())
+        account = row_to_dict(c.execute(
+            "SELECT a.*, f.name AS firm_name, f.address AS firm_address, f.pincode AS firm_pincode, f.gstin AS firm_gstin "
+            "FROM accounts a JOIN firms f ON f.id=a.firm_id WHERE a.id=?", (body.account_id,)).fetchone())
         if not account:
             raise HTTPException(404, "Account not found")
         if account["marketplace"] != profile["marketplace"]:

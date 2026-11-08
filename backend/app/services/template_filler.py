@@ -213,6 +213,9 @@ def _fmt_number(v):
     return v
 
 
+CONSTANTS = {"const.free_size": "Free Size", "const.one": 1, "const.saree": "Saree"}
+
+
 def resolve_value(source: str, const_value, product: dict, account: dict, listing: dict | None,
                   generated: dict):
     if not source:
@@ -221,6 +224,10 @@ def resolve_value(source: str, const_value, product: dict, account: dict, listin
         return const_value
     if source == "const.women":
         return "Women"
+    if source in CONSTANTS:
+        return CONSTANTS[source]
+    if source.startswith("firm."):
+        return account.get(f"firm_{source[5:]}")
     if source.startswith("product."):
         return _fmt_number(product.get(source[8:]))
     if source.startswith("image."):

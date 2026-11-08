@@ -13,6 +13,7 @@ class FirmIn(BaseModel):
     gstin: str | None = None
     state: str | None = None
     address: str | None = None
+    pincode: str | None = None
 
 
 class AccountIn(BaseModel):
@@ -42,8 +43,8 @@ def list_firms():
 def create_firm(f: FirmIn):
     with get_conn() as c:
         try:
-            cur = c.execute("INSERT INTO firms (name, gstin, state, address) VALUES (?,?,?,?)",
-                            (f.name, f.gstin, f.state, f.address))
+            cur = c.execute("INSERT INTO firms (name, gstin, state, address, pincode) VALUES (?,?,?,?,?)",
+                            (f.name, f.gstin, f.state, f.address, f.pincode))
         except Exception as e:
             raise HTTPException(400, f"Could not save firm: {e}")
         return row_to_dict(c.execute("SELECT * FROM firms WHERE id=?", (cur.lastrowid,)).fetchone())
@@ -52,8 +53,8 @@ def create_firm(f: FirmIn):
 @router.put("/firms/{firm_id}")
 def update_firm(firm_id: int, f: FirmIn):
     with get_conn() as c:
-        c.execute("UPDATE firms SET name=?, gstin=?, state=?, address=? WHERE id=?",
-                  (f.name, f.gstin, f.state, f.address, firm_id))
+        c.execute("UPDATE firms SET name=?, gstin=?, state=?, address=?, pincode=? WHERE id=?",
+                  (f.name, f.gstin, f.state, f.address, f.pincode, firm_id))
         return row_to_dict(c.execute("SELECT * FROM firms WHERE id=?", (firm_id,)).fetchone())
 
 

@@ -39,7 +39,7 @@ export default function Setup() {
       <PageHead title="Firms & accounts" sub="Each marketplace account belongs to a firm (GSTIN). Prices and SKUs can differ per account." />
       <div className="card">
         <div className="row" style={{ marginBottom: 12 }}><h2 style={{ margin: 0 }}>Firms</h2><span className="spacer" />
-          <button className="primary" onClick={() => setFirm({ name: '', gstin: '', state: '', address: '' })}>Add firm</button></div>
+          <button className="primary" onClick={() => setFirm({ name: '', gstin: '', state: '', address: '', pincode: '' })}>Add firm</button></div>
         {firms.data?.length === 0 ? <Empty>Add your first firm.</Empty> : (
           <div className="table-wrap"><table>
             <thead><tr><th>Name</th><th>GSTIN</th><th>State</th><th className="num">Accounts</th><th /></tr></thead>
@@ -68,11 +68,12 @@ export default function Setup() {
 
       {firm && (
         <Modal title={firm.id ? 'Edit firm' : 'Add firm'} onClose={() => setFirm(null)}>
-          {(['name', 'gstin', 'state'] as const).map((k) => (
+          {(['name', 'gstin', 'state', 'pincode'] as const).map((k) => (
             <div className="field" key={k}><label>{k === 'gstin' ? 'GSTIN' : k[0].toUpperCase() + k.slice(1)}</label>
               <input value={firm[k] || ''} onChange={(e) => setFirm({ ...firm, [k]: e.target.value })} /></div>
           ))}
-          <div className="field"><label>Address</label><textarea value={firm.address || ''} onChange={(e) => setFirm({ ...firm, address: e.target.value })} /></div>
+          <div className="field"><label>Address</label><textarea value={firm.address || ''} onChange={(e) => setFirm({ ...firm, address: e.target.value })} />
+            <div className="help">Used for Manufacturer / Packer address on marketplace forms.</div></div>
           <div className="row"><span className="spacer" /><button onClick={() => setFirm(null)}>Cancel</button><button className="primary" disabled={!firm.name} onClick={saveFirm}>Save</button></div>
         </Modal>
       )}

@@ -45,6 +45,7 @@ def init_db():
 # columns added after the first release: (table, column, definition)
 MIGRATIONS = [
     ("accounts", "store_name", "TEXT"),
+    ("firms", "pincode", "TEXT"),
     ("orders", "status_text", "TEXT"),
     ("orders", "cancel_charges", "REAL"),
     ("orders", "return_charges", "REAL"),

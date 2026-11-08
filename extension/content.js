@@ -346,7 +346,25 @@
   async function doFill() {
     if (!S.payloads) return
     S.busy = 'fill'; S.error = ''; S.info = ''; render()
-    try { S.results = await E.fill(currentPayloads(), S.ctx.learned, { onlyEmpty: S.onlyEmpty }) } catch (e) { S.error = e.message }
+    try {
+      const pls = currentPayloads()
+      const tabs = E.productTabs()
+      if (pls.length > 1 && tabs.length >= 2) {
+        // Meesho-style catalog: one tab per product. Fill each tab with its own colour variant.
+        S.results = []
+        for (let i = 0; i < Math.min(pls.length, tabs.length); i++) {
+          await E.openProductTab(i)
+          const res = await E.fill(pls[i], S.ctx.learned, { onlyEmpty: S.onlyEmpty })
+          const tag = ` · ${pls[i].values['product.color'] || 'product ' + (i + 1)}`
+          res.forEach((r) => { r.label += tag })
+          S.results.push(...res)
+        }
+        await E.openProductTab(0)
+        if (pls.length > tabs.length) S.error = `${pls.length - tabs.length} variant(s) have no product tab. Add their photos first (Add Product).`
+      } else {
+        S.results = await E.fill(pls, S.ctx.learned, { onlyEmpty: S.onlyEmpty })
+      }
+    } catch (e) { S.error = e.message }
     S.busy = ''; render()
     return S.results
   }
@@ -495,7 +513,7 @@
   // ---------------------------------------------------------------- teach
   async function startTeach(fromResult) {
     if (fromResult) {
-      S.teach = { el: fromResult.el, label: fromResult.label.replace(/ · variant \d+$/, ''), source: fromResult.source || '', value: '', value_map: {} }
+      S.teach = { el: fromResult.el, label: fromResult.label.replace(/ · [^·]+$/, ''), source: fromResult.source || '', value: '', value_map: {} }
       const known = S.ctx.learned.find((l) => l.label_norm === E.normalise(S.teach.label))
       if (known) Object.assign(S.teach, { source: known.source, value: known.value, value_map: known.value_map || {} })
       render(); return
