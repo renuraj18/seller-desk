@@ -44,6 +44,9 @@
       .trim()
   }
 
+  // helper / validation / hint texts that sit next to fields but are not their names
+  const MESSAGE_RE = /^(enter|please|must|should|value|max|min|only|invalid|required|error|suggested|recommended|you can|we recommend|tip)\b|₹|\d{3,}/i
+
   let SYNONYMS = []
   function setSynonyms(list) { SYNONYMS = list || [] }
   function guess(label) {
@@ -156,8 +159,8 @@
       const controls = deepAll(a, CTRL).filter((c) => c !== el && !el.contains(c) && !c.contains(el) && visible(c))
       if (controls.length) break
       const t = textAround(a, start)
-      if (t && t.length <= 80) return t
-      if (t) break
+      if (t && t.length <= 80 && !MESSAGE_RE.test(t)) return t
+      if (t && !MESSAGE_RE.test(t)) break
     }
     const above = headerAbove(host || el)
     if (above) return above
@@ -170,11 +173,10 @@
     if (!r.width) return ''
     const cx = r.left + r.width / 2
     let best = ''; let bestGap = 220; let bestRank = 9
-    const MESSAGE = /^(enter|please|must|should|value|max|min|only|invalid|required|error)\b|₹|\d{3,}/i
     const tw = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT)
     for (let n = tw.nextNode(); n; n = tw.nextNode()) {
       const t = clean(n.textContent)
-      if (!t || t.length > 50 || !/[a-z]/i.test(t) || MESSAGE.test(t)) continue
+      if (!t || t.length > 50 || !/[a-z]/i.test(t) || MESSAGE_RE.test(t)) continue
       const p = n.parentElement
       if (!p || inPanel(p) || p.closest('button, [role=option], [role=listbox], .MuiPopover-root, label')) continue
       const pr = p.getBoundingClientRect()
