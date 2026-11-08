@@ -104,7 +104,7 @@
     const before = []; const after = []
     const skip = (n) => {
       for (let p = n.parentElement; p && p !== container; p = p.parentElement) {
-        if (p === el || p.matches('select,option,textarea,[role=listbox],[role=option],script,style,button,legend,fieldset,[role=tooltip],[data-testid=tooltip]')) return true
+        if (p === el || p.matches('select,option,textarea,[role=listbox],[role=option],script,style,button,legend,fieldset,[role=tooltip],[data-testid=tooltip],.MuiFormHelperText-root,[class*="helper" i],[class*="error" i],[role=alert]')) return true
       }
       return false
     }
