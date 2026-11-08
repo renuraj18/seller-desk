@@ -31,7 +31,11 @@
     return s
   }
   function clean(t) {
-    return String(t || '')
+    const s = String(t || '')
+      .replace(/[\u200B-\u200D\u2060\uFEFF]/g, '') // zero-width characters (MUI outline legends, etc.)
+      .replace(/\u00A0/g, ' ')
+    if (!/[a-z0-9]/i.test(s)) return ''
+    return s
       .replace(/\b\d+\s*\/\s*\d+\b/g, '') // 0/100 counters
       .replace(/[*✱]/g, '')
       .replace(/\s+/g, ' ')
@@ -100,7 +104,7 @@
     const before = []; const after = []
     const skip = (n) => {
       for (let p = n.parentElement; p && p !== container; p = p.parentElement) {
-        if (p === el || p.matches('select,option,textarea,[role=listbox],[role=option],script,style,button')) return true
+        if (p === el || p.matches('select,option,textarea,[role=listbox],[role=option],script,style,button,legend,fieldset,[role=tooltip],[data-testid=tooltip]')) return true
       }
       return false
     }
