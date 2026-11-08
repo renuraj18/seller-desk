@@ -169,11 +169,12 @@
     const r = el.getBoundingClientRect()
     if (!r.width) return ''
     const cx = r.left + r.width / 2
-    let best = ''; let bestGap = 220
+    let best = ''; let bestGap = 220; let bestRank = 9
+    const MESSAGE = /^(enter|please|must|should|value|max|min|only|invalid|required|error)\b|₹|\d{3,}/i
     const tw = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT)
     for (let n = tw.nextNode(); n; n = tw.nextNode()) {
       const t = clean(n.textContent)
-      if (!t || t.length > 50 || !/[a-z]/i.test(t)) continue
+      if (!t || t.length > 50 || !/[a-z]/i.test(t) || MESSAGE.test(t)) continue
       const p = n.parentElement
       if (!p || inPanel(p) || p.closest('button, [role=option], [role=listbox], .MuiPopover-root, label')) continue
       const pr = p.getBoundingClientRect()
@@ -181,8 +182,10 @@
       if (cx < pr.left - 8 || cx > pr.right + 8) continue
       if (pr.right - pr.left > r.width * 3) continue          // a paragraph spanning the page is not a column title
       const gap = r.top - pr.bottom
-      if (gap < bestGap) {
-        // nothing else (another control) in between
+      // real column titles (h1-h6, th, columnheader) win over other nearby text
+      const rank = p.closest('h1, h2, h3, h4, h5, h6, th, [role=columnheader]') ? 0 : 1
+      if (rank < bestRank || (rank === bestRank && gap < bestGap)) {
+        bestRank = rank
         bestGap = gap
         best = t
       }
