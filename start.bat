@@ -33,7 +33,7 @@ if not exist ".venv\Scripts\python.exe" (
 
 echo.
 echo  Seller Desk is running at http://localhost:8000
-echo  Keep this window open while you work. Close it to stop Seller Desk.
+echo  Keep this window open while you work. To stop: close this window or run stop.bat.
 echo.
 start "" http://localhost:8000
 cd backend

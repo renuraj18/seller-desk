@@ -24,8 +24,8 @@ Everything runs on your own PC. Data and encrypted credentials stay in the `data
 Requirements: **Python 3.11+** ([python.org](https://www.python.org/downloads/), on Windows tick "Add Python to PATH").
 Node.js is only needed if you change the screens; a built copy of the screens is included.
 
-**Windows**: double-click `start.bat`
-**Mac / Linux**: `./start.sh`
+**Windows**: double-click `start.bat` to start, `stop.bat` to stop.
+**Mac / Linux**: `./start.sh` to start, `./stop.sh` to stop.
 
 Then open http://localhost:8000. The first run installs the Python packages into a local `.venv` folder.
 
