@@ -164,3 +164,36 @@ def put_settings(s: SettingsIn):
     if s.ai_model:
         sec.set_setting("ai_model", s.ai_model.strip())
     return get_settings()
+
+
+# ---------------------------------------------------------------- blocked words
+class BlockedIn(BaseModel):
+    term: str
+    marketplace: Literal["amazon", "flipkart", "meesho", "all"] = "all"
+    replacement: str = ""
+    note: str = ""
+
+
+@router.get("/blocked-terms")
+def list_blocked():
+    with get_conn() as c:
+        return rows_to_dicts(c.execute("SELECT * FROM blocked_terms ORDER BY marketplace, term"))
+
+
+@router.post("/blocked-terms")
+def add_blocked(b: BlockedIn):
+    term = " ".join(b.term.split())
+    if not term:
+        raise HTTPException(400, "Enter the word or phrase")
+    with get_conn() as c:
+        c.execute("INSERT INTO blocked_terms (marketplace, term, replacement, note) VALUES (?,?,?,?) "
+                  "ON CONFLICT(marketplace, term) DO UPDATE SET replacement=excluded.replacement, note=excluded.note",
+                  (b.marketplace, term, " ".join(b.replacement.split()), b.note))
+    return {"ok": True}
+
+
+@router.delete("/blocked-terms/{tid}")
+def delete_blocked(tid: int):
+    with get_conn() as c:
+        c.execute("DELETE FROM blocked_terms WHERE id=?", (tid,))
+    return {"ok": True}

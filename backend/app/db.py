@@ -47,6 +47,8 @@ MIGRATIONS = [
     ("accounts", "store_name", "TEXT"),
     ("firms", "pincode", "TEXT"),
     ("accounts", "return_price_less", "REAL DEFAULT 30"),
+    ("form_fields", "origin", "TEXT DEFAULT 'taught'"),
+    ("form_fields", "sample", "TEXT"),
     ("orders", "status_text", "TEXT"),
     ("orders", "cancel_charges", "REAL"),
     ("orders", "return_charges", "REAL"),

@@ -6,6 +6,7 @@ import json
 import re
 
 from ..db import dump, get_conn, row_to_dict, rows_to_dicts
+from . import blocked
 from . import content as content_svc
 from .secrets import get_setting
 
@@ -120,8 +121,8 @@ def enforce_rules(draft: dict, product: dict, marketplace: str) -> dict:
             st = cand
     else:
         st = st[:450]
-    return {"title": title, "highlights": hl, "bullets": bullets,
-            "description": str(draft.get("description") or "").strip(), "search_terms": st}
+    return blocked.apply({"title": title, "highlights": hl, "bullets": bullets,
+                          "description": str(draft.get("description") or "").strip(), "search_terms": st}, marketplace)
 
 
 def draft_with_ai(product: dict, marketplace: str, brand: str | None = None, model: str | None = None) -> dict:
@@ -187,4 +188,4 @@ def content_for_export(product: dict, marketplace: str, brand: str | None = None
         if title_override:
             gen["title"] = title_override
         gen["source"] = d.get("source")
-    return gen
+    return blocked.apply(gen, marketplace)

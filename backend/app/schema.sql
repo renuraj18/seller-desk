@@ -201,6 +201,28 @@ CREATE TABLE IF NOT EXISTS form_fields (
     UNIQUE (marketplace, label_norm)
 );
 
+-- Words a marketplace rejects (brand / restricted look-alikes), swapped or removed in generated listing text
+CREATE TABLE IF NOT EXISTS blocked_terms (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    marketplace TEXT NOT NULL DEFAULT 'all',     -- amazon / flipkart / meesho / all
+    term TEXT NOT NULL,
+    replacement TEXT DEFAULT '',                 -- '' = just remove the word
+    note TEXT,
+    created_at TEXT DEFAULT (datetime('now')),
+    UNIQUE (marketplace, term)
+);
+
+-- One row per "learn from a live listing" session (the one-time mapping activity, repeated when a form changes)
+CREATE TABLE IF NOT EXISTS learn_runs (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    marketplace TEXT NOT NULL,
+    product_id INTEGER REFERENCES products(id) ON DELETE SET NULL,
+    account_id INTEGER REFERENCES accounts(id) ON DELETE SET NULL,
+    fields_seen INTEGER DEFAULT 0,
+    fields_saved INTEGER DEFAULT 0,
+    created_at TEXT DEFAULT (datetime('now'))
+);
+
 -- ---------- Phase 2: payments and P&L ----------
 CREATE TABLE IF NOT EXISTS orders (
     id INTEGER PRIMARY KEY AUTOINCREMENT,

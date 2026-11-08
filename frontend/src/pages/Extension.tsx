@@ -1,8 +1,9 @@
-import { api, MP_LABEL, type Marketplace, type Row } from '../api'
+import { api, MARKETPLACES, MP_LABEL, type Marketplace, type Row } from '../api'
 import { Empty, MpBadge, PageHead, toast, useLoad } from '../components/ui'
 
 export default function Extension() {
   const fields = useLoad<Row[]>(() => api.get('/api/ext/fields'))
+  const learn = useLoad<Record<string, Row>>(() => api.get('/api/learn/status'))
   const meta = useLoad<Row>(() => api.get('/api/fields'))
   const sourceLabel = (k: string) => meta.data?.sources.find((s: Row) => s.key === k)?.label || k
 
@@ -40,15 +41,34 @@ export default function Extension() {
         </div>
       </div>
       <div className="card">
+        <h2>Learn each marketplace form (one-time, repeat when a form changes)</h2>
+        <p className="muted small">Pick a product that is already live on the marketplace, ideally your top seller. Open its edit page, then use the <b>Learn</b> tab in the extension. Seller Desk reads every field, works out which of your values it holds, and remembers the mapping for all accounts and Excel templates. Do it again if Meesho, Flipkart or Amazon changes a form or fields stop filling.</p>
+        <div className="table-wrap"><table>
+          <thead><tr><th>Marketplace</th><th>Learn from</th><th>Learned</th><th>Last run</th></tr></thead>
+          <tbody>{MARKETPLACES.map((mp) => {
+            const s = learn.data?.[mp]
+            const t = s?.target
+            return (
+              <tr key={mp}>
+                <td><MpBadge mp={mp as Marketplace} /></td>
+                <td>{t ? <><code>{t.sku}</code> <span className="small muted">{t.account_name}{t.sold ? ` · ${t.sold} sold` : s?.chosen ? '' : ' · most recently listed'}</span></> : <span className="muted small">Add an account and list one saree first</span>}</td>
+                <td>{s ? `${s.learned_fields} learned${s.taught_fields ? ` · ${s.taught_fields} taught` : ''}` : '—'}</td>
+                <td className="small">{s?.last_run ? `${new Date(s.last_run.created_at + 'Z').toLocaleDateString('en-IN')} · ${s.last_run.fields_saved} fields` : <span className="warn">Not learned yet</span>}</td>
+              </tr>
+            )
+          })}</tbody>
+        </table></div>
+      </div>
+      <div className="card">
         <h2>Taught fields</h2>
-        <p className="muted small">When a field isn't recognised, click <b>Teach</b> in the extension. What you teach is saved here per marketplace and used for every account of both firms.</p>
+        <p className="muted small">Everything learned or taught, per marketplace, used for every account of both firms. When a single field isn't recognised, click <b>Teach</b> in the extension.</p>
         {fields.data?.length === 0 ? <Empty>Nothing taught yet.</Empty> : (
           <div className="table-wrap"><table>
             <thead><tr><th>Marketplace</th><th>Field on the form</th><th>Filled with</th><th>Translations</th><th /></tr></thead>
             <tbody>{fields.data?.map((f) => (
               <tr key={f.id}>
                 <td><MpBadge mp={f.marketplace as Marketplace} /></td>
-                <td><b>{f.label}</b></td>
+                <td><b>{f.label}</b> {f.origin === 'learned' && <span className="small muted">learned</span>}</td>
                 <td>{!f.source ? <span className="muted">Ignored</span> : f.source === 'const.custom' ? <>Fixed value: <code>{f.value}</code></> : sourceLabel(f.source)}</td>
                 <td className="small">{Object.entries(f.value_map || {}).map(([a, b]) => `${a} → ${b}`).join(', ') || '—'}</td>
                 <td className="num"><button className="ghost danger" onClick={() => del(f)}>Remove</button></td>

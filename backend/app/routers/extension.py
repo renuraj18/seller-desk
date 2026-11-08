@@ -218,7 +218,7 @@ def learn_field(marketplace: Market, f: LearnedField):
         c.execute("INSERT INTO form_fields (marketplace, label_norm, label, source, value, value_map) "
                   "VALUES (?,?,?,?,?,?) ON CONFLICT(marketplace, label_norm) DO UPDATE SET label=excluded.label, "
                   "source=excluded.source, value=excluded.value, value_map=excluded.value_map, "
-                  "updated_at=datetime('now')",
+                  "origin='taught', updated_at=datetime('now')",
                   (marketplace, key, f.label.strip()[:200], f.source, f.value, dump(f.value_map or {})))
     return {"ok": True, "label_norm": key}
 

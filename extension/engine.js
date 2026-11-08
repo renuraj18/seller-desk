@@ -509,6 +509,22 @@
     return r
   }
 
+  // ------------------------------------------------------------- learn: read every field of a live listing
+  function scanForm() {
+    const seen = new Map()
+    for (const el of findControls()) {
+      const label = clean(labelOf(el))
+      const norm = normalise(label)
+      if (!norm || /^search/.test(norm) || el.type === 'file' || el.type === 'checkbox' || el.type === 'radio') continue
+      const value = String(currentValue(el) || '').trim()
+      const prev = seen.get(norm)
+      if (prev && (prev.value || !value)) continue
+      const options = el.tagName === 'SELECT' ? [...el.options].map((o) => o.text.trim()).filter(Boolean).slice(0, 200) : []
+      seen.set(norm, { label, kind: kindOf(el), value, options })
+    }
+    return [...seen.values()]
+  }
+
   // ------------------------------------------------------------- variant tabs (Meesho: Product 1, Product 2 …)
   function productTabs() {
     const out = []
@@ -754,5 +770,5 @@
     })
   }
 
-  globalThis.SDEngine = { productTabs, openProductTab, closePopups, bestOption, headerAbove, scanOrders, activeTabText, scanStock, setStock, normalise, guess, setSynonyms, findControls, labelOf, kindOf, plan, fill, fillOne, attachImages, b64ToFile, pickField, clearMarks, HOST_ID }
+  globalThis.SDEngine = { productTabs, openProductTab, closePopups, bestOption, headerAbove, scanOrders, activeTabText, scanStock, setStock, normalise, guess, setSynonyms, findControls, scanForm, labelOf, kindOf, plan, fill, fillOne, attachImages, b64ToFile, pickField, clearMarks, HOST_ID }
 })()

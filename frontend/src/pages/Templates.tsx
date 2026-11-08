@@ -44,6 +44,7 @@ export default function Templates() {
                 <td className="num"><div className="actions" style={{ justifyContent: 'flex-end' }}>
                   <Link className="btn" to={`/templates/${t.id}`}>Mapping</Link>
                   <button className="primary" onClick={() => setExp(t)}>Fill</button>
+                  <button className="ghost" title="Fill columns from what was learned on the live form" onClick={async () => { try { const r = await api.post(`/api/templates/${t.id}/apply-learned`); toast.ok(`${r.applied} columns mapped from learned fields`); reload() } catch (e) { toast.err(e) } }}>Apply learned</button>
                   <button className="ghost danger" onClick={async () => { if (confirm('Delete template?')) { await api.del(`/api/templates/${t.id}`); reload() } }}>Delete</button>
                 </div></td>
               </tr>

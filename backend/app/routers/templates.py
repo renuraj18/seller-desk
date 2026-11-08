@@ -8,6 +8,7 @@ from fastapi.responses import FileResponse
 from pydantic import BaseModel
 
 from ..db import EXPORT_DIR, UPLOAD_DIR, dump, get_conn, row_to_dict, rows_to_dicts
+from ..fields import normalise
 from ..services import template_filler as tf
 
 router = APIRouter(prefix="/api", tags=["templates"])
@@ -40,6 +41,31 @@ def _profile(c, pid):
     return p
 
 
+def apply_learned(c, marketplace: str, columns: list, mapping: dict, overwrite: bool = False) -> int:
+    """Fill template columns from the form mappings learned/taught for this marketplace (matched on header text)."""
+    learned = {r["label_norm"]: r for r in rows_to_dicts(c.execute(
+        "SELECT label_norm, source, value, value_map FROM form_fields WHERE marketplace=? AND source!=''", (marketplace,)))}
+    n = 0
+    for col in columns:
+        hit = learned.get(normalise(col["header"]))
+        cur = mapping.get(col["letter"]) or {}
+        if hit and (overwrite or not cur.get("source")):
+            mapping[col["letter"]] = {"source": hit["source"], "value": hit["value"] or "", "value_map": hit["value_map"] or {}}
+            n += 1
+    return n
+
+
+@router.post("/templates/{pid}/apply-learned")
+def apply_learned_to_template(pid: int, overwrite: bool = False):
+    """Re-map this template from what was learned on the live form (run after re-learning a marketplace)."""
+    with get_conn() as c:
+        p = _profile(c, pid)
+        mapping = p["mapping"] or {}
+        n = apply_learned(c, p["marketplace"], p["columns"], mapping, overwrite)
+        c.execute("UPDATE template_profiles SET mapping=?, updated_at=datetime('now') WHERE id=?", (dump(mapping), pid))
+        return {"applied": n, "template": _profile(c, pid)}
+
+
 @router.get("/templates")
 def list_templates():
     with get_conn() as c:
@@ -68,6 +94,7 @@ async def upload_template(file: UploadFile = File(...), name: str = Form(...),
         stored.unlink(missing_ok=True)
         raise HTTPException(400, f"Could not read this workbook: {e}")
     with get_conn() as c:
+        apply_learned(c, marketplace, info["columns"], info["mapping"])
         cur = c.execute(
             "INSERT INTO template_profiles (name, marketplace, original_filename, stored_path, sheet_name, header_row, "
             "data_start_row, columns, mapping) VALUES (?,?,?,?,?,?,?,?,?)",

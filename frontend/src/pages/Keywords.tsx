@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { api, type Row } from '../api'
+import { api, MARKETPLACES, MP_LABEL, type Row } from '../api'
 import { Empty, Modal, PageHead, toast, useLoad } from '../components/ui'
 
 const blank = { name: '', match_terms: '', primary_keywords: '', secondary_keywords: '', long_tail: '', notes: '' }
@@ -7,6 +7,11 @@ const blank = { name: '', match_terms: '', primary_keywords: '', secondary_keywo
 export default function Keywords() {
   const { data, reload } = useLoad<Row[]>(() => api.get('/api/keyword-sets'))
   const [edit, setEdit] = useState<Row | null>(null)
+  const blocked = useLoad<Row[]>(() => api.get('/api/blocked-terms'))
+  const [bt, setBt] = useState({ term: '', replacement: '', marketplace: 'all' })
+  const addBlocked = async () => {
+    try { await api.post('/api/blocked-terms', bt); setBt({ ...bt, term: '', replacement: '' }); blocked.reload(); toast.ok('Added') } catch (e) { toast.err(e) }
+  }
   const save = async () => {
     try {
       if (edit!.id) await api.put(`/api/keyword-sets/${edit!.id}`, edit)
@@ -32,6 +37,29 @@ export default function Keywords() {
           ))}</tbody>
         </table></div>
       )}
+      <div className="card">
+        <h2>Blocked words</h2>
+        <p className="muted small">Words a marketplace flags as look-alikes of authorised brands or restricted products (for example a design name). They are swapped for your replacement, or removed, in titles, highlights, bullets, descriptions and search terms whenever a listing is exported or filled by the extension. The SEO check also warns about them.</p>
+        <div className="row">
+          <input placeholder="Flagged word or phrase" value={bt.term} onChange={(e) => setBt({ ...bt, term: e.target.value })} />
+          <input placeholder="Replace with (blank = remove)" value={bt.replacement} onChange={(e) => setBt({ ...bt, replacement: e.target.value })} />
+          <select value={bt.marketplace} onChange={(e) => setBt({ ...bt, marketplace: e.target.value })}>
+            <option value="all">All marketplaces</option>
+            {MARKETPLACES.map((m) => <option key={m} value={m}>{MP_LABEL[m]}</option>)}
+          </select>
+          <button className="primary" disabled={!bt.term.trim()} onClick={addBlocked}>Add</button>
+        </div>
+        {blocked.data?.length ? (
+          <div className="table-wrap"><table>
+            <thead><tr><th>Word</th><th>Replaced with</th><th>Where</th><th /></tr></thead>
+            <tbody>{blocked.data.map((b) => (
+              <tr key={b.id}><td><b>{b.term}</b></td><td>{b.replacement || <span className="muted">removed</span>}</td>
+                <td>{b.marketplace === 'all' ? 'All' : MP_LABEL[b.marketplace as keyof typeof MP_LABEL]}</td>
+                <td className="num"><button className="ghost danger" onClick={async () => { await api.del(`/api/blocked-terms/${b.id}`); blocked.reload() }}>Remove</button></td></tr>
+            ))}</tbody>
+          </table></div>
+        ) : <Empty>No blocked words yet.</Empty>}
+      </div>
       {edit && (
         <Modal title={edit.id ? 'Edit keyword set' : 'New keyword set'} onClose={() => setEdit(null)}>
           {([['name', 'Name', 'Kanjivaram silk'], ['match_terms', 'Applies to products whose fabric / type contains (comma separated)', 'kanjivaram, kanchipuram, kanchi'],

@@ -274,6 +274,10 @@ def seo_check(content: dict, product: dict, marketplace: str, primary_keywords: 
         brand = (product.get("brand") or "").lower()
         if brand and brand in st.lower().split():
             bad(5, "Remove the brand name from search terms")
+    from . import blocked
+    hits = blocked.find(content, marketplace)
+    if hits:
+        bad(15, f"Contains words {marketplace.title()} may reject: {', '.join(hits)} (swapped automatically on export)")
     if primary_keywords:
         head = title[:45].lower()
         if not any(k.lower() in head for k in primary_keywords if k):

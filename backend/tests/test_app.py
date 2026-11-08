@@ -466,3 +466,70 @@ def test_orders_capture_import_and_master_excel(client, setup_data):
     assert {"Shipped", "Courier return (RTO)", "Cancelled"} <= statuses
     summary = x["Summary"]
     assert summary["A2"].value == "Raj Textiles" and summary["B2"].value == "Meesho"
+
+
+# ---------------------------------------------------------------- learn from a live listing
+def test_learn_proposes_saves_and_remaps_template(client, setup_data):
+    mid, pid = setup_data["meesho"]["id"], setup_data["product"]["id"]
+    # no orders yet: falls back to listed products, then to whatever target is chosen
+    t = client.put("/api/learn/target", json={"marketplace": "meesho", "product_id": pid, "account_id": mid}).json()
+    assert t["target"]["product_id"] == pid and t["chosen"]
+
+    seen = [
+        {"label": "Saree Fabric", "value": "Kanjivaram Silk", "kind": "select", "options": ["Kanjivaram Silk"]},
+        {"label": "Wrong/Defective Returns Price", "value": "2469", "kind": "text"},
+        {"label": "Weight in grams", "value": "700", "kind": "text"},
+        {"label": "Blouse", "value": "Separate Blouse Piece", "kind": "select", "options": ["Separate Blouse Piece"]},
+        {"label": "Seller note", "value": "Handle with care", "kind": "text"},
+        {"label": "Fabric care", "value": "", "kind": "text"},
+        {"label": "Search products", "value": "x", "kind": "text"},
+        {"label": "Saree Fabric", "value": "dup", "kind": "text"},
+    ]
+    r = client.post("/api/learn/propose", json={"marketplace": "meesho", "product_id": pid, "account_id": mid,
+                                                "fields": seen}).json()
+    by = {f["label"]: f for f in r["fields"]}
+    assert len(r["fields"]) == 6                      # search box and duplicate label dropped
+    assert by["Saree Fabric"]["source"] == "product.fabric" and by["Saree Fabric"]["confidence"] == "high"
+    assert by["Wrong/Defective Returns Price"]["source"] == "listing.return_price"
+    assert by["Weight in grams"]["source"] == "product.net_weight_g"          # matched by value alone
+    assert by["Blouse"]["source"] == "product.blouse_piece"                   # label match, form value differs
+    assert by["Blouse"]["value_map"] == {"Unstitched Blouse Piece": "Separate Blouse Piece"}
+    assert by["Seller note"]["confidence"] == "fixed" and by["Seller note"]["accept"] is False
+    assert by["Fabric care"]["accept"] is False
+
+    items = [{"label": f["label"], "source": f["source"], "value": f["value"], "value_map": f["value_map"],
+              "sample": f["form_value"]} for f in r["fields"] if f["accept"]]
+    assert client.post("/api/learn/save", json={"marketplace": "meesho", "product_id": pid, "account_id": mid,
+                                                "fields_seen": 6, "items": items}).json()["saved"] == len(items)
+    st = client.get("/api/learn/status").json()["meesho"]
+    assert st["last_run"]["fields_saved"] == len(items) and st["learned_fields"] == len(items)
+    ctx = client.get("/api/ext/context", params={"marketplace": "meesho"}).json()
+    assert any(l["label"] == "Blouse" and l["value_map"] for l in ctx["learned"])
+
+    # a template whose header matches a learned label picks the mapping up
+    tpl = client.post("/api/templates", data={"name": "Learn tpl", "marketplace": "meesho"},
+                      files={"file": ("t.xlsx", _meesho_like_template(), "application/vnd.ms-excel")}).json()
+    assert client.post(f"/api/templates/{tpl['id']}/apply-learned").status_code == 200
+
+
+# ---------------------------------------------------------------- blocked words
+def test_blocked_terms_swapped_on_export_and_flagged(client, setup_data):
+    from app.services import blocked
+    pid, mid = setup_data["product"]["id"], setup_data["meesho"]["id"]
+    client.post("/api/blocked-terms", json={"term": "Vaira Oosi", "marketplace": "meesho", "replacement": "Needle Border"})
+    client.post("/api/blocked-terms", json={"term": "Pongal", "marketplace": "all"})
+    content = {"title": "Vaira Oosi Silk Saree", "description": "Traditional vaira  oosi saree. Ideal for weddings, Pongal, Diwali.",
+               "bullets": ["Pongal special", "Soft"], "search_terms": "vairaoosi, pongal saree"}
+    out = blocked.apply(content, "meesho")
+    assert out["title"] == "Needle Border Silk Saree"
+    assert "Needle Border saree" in out["description"] and "Pongal" not in out["description"]
+    assert out["bullets"] == ["special", "Soft"]
+    assert "vairaoosi" in out["search_terms"]                      # whole-word match only
+    assert blocked.apply(content, "flipkart")["title"] == "Vaira Oosi Silk Saree"   # meesho-only rule
+    assert blocked.find(content, "meesho") == ["Vaira Oosi", "Pongal"]
+    chk = client.get(f"/api/products/{pid}/drafts").json()["drafts"]["meesho"]
+    assert not any("may reject" in i for i in chk["issues"])       # product text itself is clean
+    for t in client.get("/api/blocked-terms").json():
+        client.delete(f"/api/blocked-terms/{t['id']}")
+    assert client.get("/api/blocked-terms").json() == []
+    assert mid

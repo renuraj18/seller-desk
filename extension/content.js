@@ -38,7 +38,7 @@
     open: false, connected: null, error: '', info: '', ctx: null, accountId: null, detected: false,
     view: 'list', tab: 'todo', q: '', products: [], product: null, group: [], variantIdx: -1,
     payloads: null, results: null, busy: '', onlyEmpty: false, teach: null,
-    stock: [], stockScan: null, orderScan: null, pageStatus: '', tabHint: '', clickSave: true, auto: null, autoSubmit: false,
+    learn: null, stock: [], stockScan: null, orderScan: null, pageStatus: '', tabHint: '', clickSave: true, auto: null, autoSubmit: false,
   }
   const currentPayloads = () => (S.variantIdx < 0 ? S.payloads : [S.payloads[S.variantIdx]])
 
@@ -123,8 +123,10 @@
         <button class="x" data-a="close" title="Minimise">–</button></div>
       ${S.connected && !S.teach ? `<div class="views"><button class="${S.view === 'list' ? 'on' : ''}" data-a="view" data-v="list">List sarees</button>
         <button class="${S.view === 'stock' ? 'on' : ''}" data-a="view" data-v="stock">Stock</button>
-        <button class="${S.view === 'orders' ? 'on' : ''}" data-a="view" data-v="orders">Orders</button></div>` : ''}
-      <div class="body">${S.teach ? teachView() : S.view === 'stock' && S.connected ? stockView() : S.view === 'orders' && S.connected ? ordersView() : mainView()}</div></div>`
+        <button class="${S.view === 'orders' ? 'on' : ''}" data-a="view" data-v="orders">Orders</button>
+        <button class="${S.view === 'learn' ? 'on' : ''}" data-a="view" data-v="learn">Learn</button></div>` : ''}
+      <div class="body">${S.teach ? teachView() : S.view === 'stock' && S.connected ? stockView() : S.view === 'orders' && S.connected ? ordersView() : S.view === 'learn' && S.connected ? learnView() : mainView()}</div></div>`
+    if (S.view === 'learn' && S.open) { const b = root.querySelector('.body'); if (b) b.scrollTop = S._learnScroll || 0 }
   }
 
   function accountPicker() {
@@ -285,6 +287,71 @@
       ${t.source === 'const.custom' ? `<div class="field"><label>Value for every listing</label><input data-a="tValue" value="${esc(t.value || '')}"></div>` : ''}
       <div class="field"><label>Translate values (optional)</label><textarea data-a="tMap" placeholder="Your value = value on ${MP_LABEL[MP]}\nUnstitched Blouse Piece = Separate Blouse Piece">${esc(t.mapText ?? vm)}</textarea></div>
       <div class="actions"><button class="b p" data-a="saveTeach">Save &amp; fill</button><button class="b" data-a="cancelTeach">Cancel</button></div>`
+  }
+
+  // ---------------------------------------------------------------- learn a form from a live listing
+  const CONF = { high: ['Sure', 'b-live'], medium: ['Value match', 'b-live'], ambiguous: ['Check', 'b-draft'], label: ['From label', 'b-var'], fixed: ['Fixed value', 'b-draft'], empty: ['Empty', ''] }
+  function learnView() {
+    const L = S.learn
+    if (!L) return '<div class="muted">Loading…</div>'
+    let h = notes()
+    const t = L.info?.target
+    if (!t) return h + `<div class="msg info">Nothing to learn from yet. Add a ${MP_LABEL[MP]} account and list (or import) one saree on it first.</div>`
+    if (!L.rows) {
+      const c = L.info.candidates
+      return h + `<div class="muted" style="margin-bottom:8px">Teach Seller Desk this whole form in one go, from a product that is already live. Redo it whenever ${MP_LABEL[MP]} changes the form or fields stop filling.</div>
+        <div class="field"><label>Learn from ${L.info.source === 'orders' ? 'your top sellers' : 'a listed saree'}</label>
+          <select data-a="lTarget">${(c.some((x) => x.product_id === t.product_id && x.account_id === t.account_id) ? c : [t, ...c]).map((x) => `<option value="${x.product_id}:${x.account_id}" ${x.product_id === t.product_id && x.account_id === t.account_id ? 'selected' : ''}>${esc(x.sku)} · ${esc(x.account_name)}${x.sold ? ` · ${x.sold} sold` : ''}</option>`).join('')}</select></div>
+        <ol class="muted" style="margin:0 0 10px 16px;padding:0;line-height:1.6">
+          <li>On ${MP_LABEL[MP]}, open the <b>edit page</b> of <b>${esc(t.sku)}</b>${t.name ? ` (${esc(t.name)})` : ''} in <b>${esc(t.account_name)}</b>.</li>
+          <li>Make sure all sections and dropdowns of the form are showing.</li>
+          <li>Click <b>Learn this page</b>.</li></ol>
+        <div class="actions"><button class="b p" data-a="learnScan" ${S.busy ? 'disabled' : ''}>${S.busy === 'learn' ? 'Reading…' : 'Learn this page'}</button></div>
+        ${L.info.last_run ? `<div class="muted" style="margin-top:10px">Last learned ${esc(L.info.last_run.created_at)} · ${L.info.last_run.fields_saved} fields${L.info.last_run.sku ? ` from ${esc(L.info.last_run.sku)}` : ''}.</div>` : ''}`
+    }
+    const groups = [...new Set(S.ctx.sources.map((s) => s.group))]
+    const shown = L.rows.map((r, i) => [r, i]).filter(([r]) => L.showEmpty || r.confidence !== 'empty')
+    const hidden = L.rows.length - shown.length
+    const opt = (r) => `<option value="" ${!r.source ? 'selected' : ''}>— Ignore —</option>` + groups.map((g) => `<optgroup label="${esc(g)}">${S.ctx.sources.filter((s) => s.group === g).map((s) => `<option value="${s.key}" ${s.key === r.source ? 'selected' : ''}>${esc(s.label)}</option>`).join('')}</optgroup>`).join('')
+    h += `<div class="msg info">Read <b>${L.rows.length}</b> fields from <b>${esc(L.product.sku)}</b>. Tick the ones to remember; fix any wrong source.</div>
+      <div class="list" style="max-height:none">${shown.map(([r, i]) => {
+        const [cl, cc] = CONF[r.confidence] || ['', '']
+        return `<div class="item" style="cursor:default;align-items:flex-start"><input type="checkbox" data-a="lAccept" data-i="${i}" ${r.accept ? 'checked' : ''} style="margin-top:3px">
+          <div style="flex:1;min-width:0"><div><b>${esc(r.label)}</b> <span class="badge ${cc}">${cl}</span>${r.changed ? ' <span class="badge b-draft">changed</span>' : ''}</div>
+            <div class="muted" style="overflow-wrap:anywhere">Form: ${esc(r.form_value || '—')}</div>
+            <select data-a="lSource" data-i="${i}" style="margin-top:3px">${opt(r)}</select>
+            ${r.source === 'const.custom' ? `<input type="text" data-a="lValue" data-i="${i}" value="${esc(r.value || '')}" style="margin-top:3px">` : ''}
+            ${Object.keys(r.value_map || {}).length ? `<div class="muted">Translate: ${esc(Object.entries(r.value_map).map(([a, b]) => `${a} → ${b}`).join(', '))}</div>` : ''}
+            <div class="muted">${esc(r.reason)}</div></div></div>`
+      }).join('')}</div>
+      ${hidden ? `<button class="link" data-a="lEmpty" style="margin-top:6px">Show ${hidden} empty fields</button>` : ''}
+      <div class="actions"><button class="b ok" data-a="learnSave" id="learnSaveBtn">Save ${L.rows.filter((r) => r.accept).length} mappings</button><button class="b" data-a="learnCancel">Cancel</button></div>`
+    return h
+  }
+  const learnCount = () => { const b = root.querySelector('#learnSaveBtn'); if (b) b.textContent = `Save ${S.learn.rows.filter((r) => r.accept).length} mappings` }
+  async function loadLearn() {
+    try { S.learn = { ...(S.learn || {}), info: await api(`/api/learn/target?marketplace=${MP}`), rows: S.learn?.rows || null } } catch (e) { S.error = e.message }
+  }
+  async function learnScan() {
+    const t = S.learn.info.target
+    S.error = ''; S.info = ''; S.busy = 'learn'; S._learnScroll = 0; render()
+    try {
+      const fields = E.scanForm()
+      if (fields.length < 4) throw new Error('This page has hardly any form fields. Open the edit page of the live listing first.')
+      const r = await api('/api/learn/propose', 'POST', { marketplace: MP, product_id: t.product_id, account_id: t.account_id, fields })
+      Object.assign(S.learn, { rows: r.fields, product: r.product, seen: fields.length, showEmpty: false })
+    } catch (e) { S.error = e.message }
+    S.busy = ''; render()
+  }
+  async function learnSave() {
+    const L = S.learn; const t = L.info.target
+    const items = L.rows.filter((r) => r.accept).map((r) => ({ label: r.label, source: r.source, value: r.source === 'const.custom' ? r.value : null, value_map: r.value_map || {}, sample: r.form_value }))
+    try {
+      const r = await api('/api/learn/save', 'POST', { marketplace: MP, product_id: t.product_id, account_id: t.account_id, fields_seen: L.seen || 0, items })
+      L.rows = null; S._learnScroll = 0; await refreshLearned(); await loadLearn()
+      S.info = `Saved ${r.saved} field mappings for ${MP_LABEL[MP]}. They now apply to every account.`
+    } catch (e) { S.error = e.message }
+    render()
   }
 
   // ---------------------------------------------------------------- account detection
@@ -556,7 +623,7 @@
     if (a === 'open') { S.open = true; store.set('open', true); render(); if (S.connected !== true) connect() }
     else if (a === 'close') { S.open = false; store.set('open', false); render() }
     else if (a === 'retry') connect()
-    else if (a === 'view') { S.view = t.dataset.v; S.q = ''; S.error = ''; S.info = ''; if (S.view === 'stock') await loadStock(); if (S.view === 'orders') S.tabHint = E.activeTabText(); render() }
+    else if (a === 'view') { S.view = t.dataset.v; S.q = ''; S.error = ''; S.info = ''; if (S.view === 'stock') await loadStock(); if (S.view === 'orders') S.tabHint = E.activeTabText(); if (S.view === 'learn') await loadLearn(); render() }
     else if (a === 'tab') { S.tab = t.dataset.v; S._autoSwitched = true; await loadProducts(); render() }
     else if (a === 'pick') pick(Number(t.dataset.id))
     else if (a === 'variant') { S.variantIdx = Number(t.dataset.i); S.results = null; E.clearMarks(); render() }
@@ -576,6 +643,11 @@
     else if (a === 'syncStock') scanStock(true)
     else if (a === 'readStock') scanStock(false)
     else if (a === 'captureOrders') captureOrders()
+    else if (a === 'learnScan') learnScan()
+    else if (a === 'learnSave') learnSave()
+    else if (a === 'learnCancel') { S.learn.rows = null; S._learnScroll = 0; render() }
+    else if (a === 'lEmpty') { S.learn.showEmpty = true; S._learnScroll = root.querySelector('.body')?.scrollTop; render() }
+    else if (a === 'lAccept') { S.learn.rows[Number(t.dataset.i)].accept = t.checked; learnCount() }
   })
   root.addEventListener('change', async (e) => {
     const a = e.target.dataset.a
@@ -584,6 +656,17 @@
       S.product = null; S.payloads = null; S.results = null; S.tab = 'todo'; S.stockScan = null; S._autoSwitched = false
       await loadProducts(); if (S.view === 'stock') await loadStock(); render()
     } else if (a === 'tSource') { S.teach.source = e.target.value; render() }
+    else if (a === 'lTarget') {
+      const [product_id, account_id] = e.target.value.split(':').map(Number)
+      try { S.learn.info = await api('/api/learn/target', 'PUT', { marketplace: MP, product_id, account_id }) } catch (err) { S.error = err.message }
+      render()
+    } else if (a === 'lSource') {
+      const r = S.learn.rows[Number(e.target.dataset.i)]
+      r.source = e.target.value; r.accept = !!r.source; r.confidence = r.source ? r.confidence : 'empty'
+      if (r.source === 'const.custom' && !r.value) r.value = r.form_value
+      r.value_map = {}   // a translation belongs to the source it was proposed for
+      S._learnScroll = root.querySelector('.body')?.scrollTop; render()
+    }
     else if (a === 'pageStatus') S.pageStatus = e.target.value
   })
   root.addEventListener('input', (e) => {
@@ -599,6 +682,7 @@
     } else if (a === 'tLabel') S.teach.label = e.target.value
     else if (a === 'tValue') S.teach.value = e.target.value
     else if (a === 'tMap') S.teach.mapText = e.target.value
+    else if (a === 'lValue') S.learn.rows[Number(e.target.dataset.i)].value = e.target.value
   })
   ;['keydown', 'keyup', 'keypress'].forEach((t) => root.addEventListener(t, (e) => e.stopPropagation()))
 
