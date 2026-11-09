@@ -269,6 +269,52 @@ CREATE TABLE IF NOT EXISTS expenses (
     note TEXT
 );
 
+-- Master product templates: default values per saree type/category for quick product creation
+CREATE TABLE IF NOT EXISTS product_templates (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    name TEXT NOT NULL UNIQUE,                    -- e.g. "Kanjivaram Silk", "Cotton Daily Wear"
+    match_fabric TEXT,                            -- fabric value to auto-match (comma-separated)
+    match_saree_type TEXT,                        -- saree_type value to auto-match (comma-separated)
+    -- Tax & price defaults
+    hsn TEXT,
+    gst_rate REAL,
+    mrp REAL,
+    selling_price REAL,
+    cost_price REAL,
+    packaging_cost REAL,
+    -- Saree defaults
+    fabric TEXT,
+    saree_type TEXT,
+    pattern TEXT,
+    work TEXT,
+    border TEXT,
+    pallu TEXT,
+    occasion TEXT,
+    saree_length_m REAL,
+    blouse_piece TEXT,
+    blouse_length_m REAL,
+    blouse_fabric TEXT,
+    blouse_color TEXT,
+    wash_care TEXT,
+    -- Shipping defaults
+    net_weight_g REAL,
+    pkg_weight_g REAL,
+    pkg_length_cm REAL,
+    pkg_breadth_cm REAL,
+    pkg_height_cm REAL,
+    -- Compliance defaults
+    country_of_origin TEXT DEFAULT 'India',
+    manufacturer_details TEXT,
+    packer_details TEXT,
+    -- Content defaults
+    description TEXT,
+    keywords TEXT,
+    brand TEXT,
+    active INTEGER DEFAULT 1,
+    created_at TEXT DEFAULT (datetime('now')),
+    updated_at TEXT DEFAULT (datetime('now'))
+);
+
 CREATE INDEX IF NOT EXISTS idx_listings_account ON listings(account_id);
 CREATE INDEX IF NOT EXISTS idx_orders_account_date ON orders(account_id, order_date);
 CREATE INDEX IF NOT EXISTS idx_settlements_account_date ON settlements(account_id, settlement_date);

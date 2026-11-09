@@ -7,7 +7,7 @@ from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 
 from .db import init_db
-from .routers import connections, content, extension, learn, listings, media, orders, products, setup, templates
+from .routers import connections, content, extension, learn, listings, media, orders, product_templates, products, setup, templates
 
 @asynccontextmanager
 async def lifespan(_app):
@@ -19,7 +19,7 @@ app = FastAPI(title="Seller Desk", version="0.1.0", lifespan=lifespan)
 app.add_middleware(CORSMiddleware, allow_origins=["http://localhost:5173"],
                    allow_origin_regex=r"chrome-extension://[a-p]{32}", allow_methods=["*"], allow_headers=["*"])
 
-for r in (setup.router, products.router, listings.router, templates.router, connections.router, content.router,
+for r in (setup.router, products.router, product_templates.router, listings.router, templates.router, connections.router, content.router,
           extension.router, media.router, orders.router, learn.router):
     app.include_router(r)
 

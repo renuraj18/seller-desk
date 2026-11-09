@@ -1,21 +1,66 @@
 import { useEffect, useState } from 'react'
-import { Link, useNavigate, useParams } from 'react-router-dom'
+import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import { api, MARKETPLACES, money, MP_LABEL, type Marketplace, type Row } from '../api'
 import { Counter, MpBadge, PageHead, Score, Status, toast, useLoad } from '../components/ui'
 
 export default function ProductEdit() {
   const { id } = useParams()
+  const [searchParams] = useSearchParams()
+  const templateId = searchParams.get('template')
   const isNew = id === 'new'
   const nav = useNavigate()
   const meta = useLoad<Row>(() => api.get('/api/fields'))
   const [p, setP] = useState<Row | null>(isNew ? { images: [], country_of_origin: 'India' } : null)
   const [tab, setTab] = useState<'details' | Marketplace | 'accounts'>('details')
+  const [templateLoading, setTemplateLoading] = useState(false)
+  const [matchingTemplates, setMatchingTemplates] = useState<Row[]>([])
+  const [showTemplates, setShowTemplates] = useState(false)
 
   useEffect(() => {
-    if (!isNew) api.get(`/api/products/${id}`).then(setP).catch(toast.err)
-  }, [id, isNew])
+    if (!isNew) {
+      api.get(`/api/products/${id}`).then(setP).catch(toast.err)
+    } else if (templateId) {
+      // Load template and apply defaults
+      setTemplateLoading(true)
+      api.post(`/api/product-templates/${templateId}/apply`, {})
+        .then((res) => {
+          const merged = res.merged
+          setP({ images: [], country_of_origin: 'India', ...merged })
+        })
+        .catch(toast.err)
+        .finally(() => setTemplateLoading(false))
+    }
+  }, [id, isNew, templateId])
+
+  // Fetch matching templates when fabric or saree_type changes (for new products)
+  useEffect(() => {
+    if (!p) return
+    if (isNew && (p.fabric || p.saree_type)) {
+      api.get(`/api/product-templates/match?fabric=${encodeURIComponent(p.fabric || '')}&saree_type=${encodeURIComponent(p.saree_type || '')}`)
+        .then((res: Row[]) => {
+          setMatchingTemplates(res.filter((t: Row) => t.active))
+          setShowTemplates(res.length > 0)
+        })
+        .catch(() => {})
+    } else {
+      setMatchingTemplates([])
+      setShowTemplates(false)
+    }
+  }, [isNew, p?.fabric, p?.saree_type])
+
+  const applyTemplate = (template: Row) => {
+    if (!p) return
+    api.post(`/api/product-templates/${template.id}/apply`, {})
+      .then((res) => {
+        const merged = res.merged
+        setP({ ...p, images: [], country_of_origin: 'India', ...merged })
+        toast.ok(`Applied template: ${template.name}`)
+      })
+      .catch(toast.err)
+  }
 
   if (!p || !meta.data) return null
+  if (templateLoading) return <div className="card" style={{ padding: 40, textAlign: 'center' }}>Loading template…</div>
   const fields: Row[] = meta.data.product_fields
   const groups = [...new Set(fields.map((f) => f.group))]
 
@@ -55,9 +100,10 @@ export default function ProductEdit() {
     <>
       <PageHead title={isNew ? 'New saree' : p.sku} sub={!isNew && [p.saree_type, p.fabric, p.color].filter(Boolean).join(' · ')}>
         <Link className="btn" to="/products">Back</Link>
+        {templateId && isNew && <span className="pill" style={{ marginRight: 8, background: 'var(--accent)', color: '#fff' }}>Template applied</span>}
         {!isNew && <button onClick={dup}>Duplicate</button>}
         {!isNew && <button className="danger" onClick={del}>Delete</button>}
-        {tab === 'details' && <button className="primary" onClick={save}>Save</button>}
+        {tab === 'details' && <button className="primary" onClick={save} disabled={templateLoading}>Save</button>}
       </PageHead>
       {!isNew && (
         <div className="tabs">
@@ -68,15 +114,40 @@ export default function ProductEdit() {
       )}
       {tab === 'details' && (
         <div className="grid" style={{ gridTemplateColumns: 'minmax(0,1fr) 260px', alignItems: 'start' }}>
-          <div>{groups.map((g) => (
-            <div className="card" key={g}><h2>{g}</h2>
-              <div className="form-grid">{fields.filter((f) => f.group === g).map((f) => (
-                <div className="field" key={f.key} style={f.type === 'textarea' || f.type === 'images' ? { gridColumn: '1 / -1' } : undefined}>
-                  <label>{f.label}{f.required && ' *'}</label>{input(f)}{f.help && <div className="help">{f.help}</div>}
+          <div>
+            {isNew && showTemplates && matchingTemplates.length > 0 && (
+              <div className="card" style={{ marginBottom: 16, border: '1px solid var(--accent)' }}>
+                <h3 style={{ marginTop: 0, display: 'flex', alignItems: 'center', gap: 8 }}>
+                  <span>✨</span> Matching templates
+                  <button className="ghost small" onClick={() => setShowTemplates(false)} style={{ marginLeft: 'auto' }}>Hide</button>
+                </h3>
+                <p className="small muted" style={{ marginBottom: 12 }}>Based on the fabric and saree type you entered, these templates match:</p>
+                <div className="grid" style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(200px, 1fr))', gap: 8 }}>
+                  {matchingTemplates.map((t: Row) => (
+                    <button
+                      key={t.id}
+                      className="btn"
+                      onClick={() => applyTemplate(t)}
+                      style={{ textAlign: 'left', padding: '10px 12px', background: 'var(--bg)', border: '1px solid var(--line)' }}
+                    >
+                      <div style={{ fontWeight: 600 }}>{t.name}</div>
+                      <div className="small muted">
+                        HSN: {t.hsn || '—'} | GST: {t.gst_rate != null ? t.gst_rate + '%' : '—'} | MRP: {money(t.mrp)}
+                      </div>
+                    </button>
+                  ))}
                 </div>
-              ))}</div>
-            </div>
-          ))}</div>
+              </div>
+            )}
+            {groups.map((g) => (
+              <div className="card" key={g}><h2>{g}</h2>
+                <div className="form-grid">{fields.filter((f) => f.group === g).map((f) => (
+                  <div className="field" key={f.key} style={f.type === 'textarea' || f.type === 'images' ? { gridColumn: '1 / -1' } : undefined}>
+                    <label>{f.label}{f.required && ' *'}</label>{input(f)}{f.help && <div className="help">{f.help}</div>}
+                  </div>
+                ))}</div>
+              </div>
+            ))}</div>
           <div style={{ position: 'sticky', top: 16 }}><div className="card">
             <h2>Preview</h2>
             {(p.images || []).filter(Boolean)[0] ? <img src={p.images.filter(Boolean)[0]} alt="" style={{ width: '100%', borderRadius: 8, marginBottom: 10 }} /> : <div className="empty small">No image</div>}
