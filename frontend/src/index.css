@@ -123,3 +123,36 @@ td.num, th.num { text-align: right; font-variant-numeric: tabular-nums; }
 .toast { padding: 10px 14px; border-radius: 8px; color: #fff; max-width: 420px; box-shadow: 0 8px 24px rgba(0,0,0,.18); font-size: 13px; }
 .toast.ok { background: #24583a; }
 .toast.err { background: var(--err); }
+
+/* marketplace agents */
+.ask-all { padding: 12px; }
+.ask-all input { flex: 1; width: auto; }
+.agents { align-items: start; }
+@media (max-width: 1200px) { .agents.g3 { grid-template-columns: 1fr; } }
+.agent { display: flex; flex-direction: column; gap: 10px; margin-bottom: 0; border-top: 3px solid var(--line); }
+.agent-meesho { border-top-color: #c2378d; }
+.agent-flipkart { border-top-color: #2f6fe0; }
+.agent-amazon { border-top-color: #e08a00; }
+.agent-head { display: flex; align-items: center; gap: 8px; }
+.quick { display: flex; flex-wrap: wrap; gap: 6px; }
+.quick button { padding: 4px 9px; font-size: 12px; }
+.chat-log { height: 460px; overflow-y: auto; display: flex; flex-direction: column; gap: 8px; padding: 4px 2px; border-top: 1px solid var(--line); border-bottom: 1px solid var(--line); }
+.bubble { padding: 9px 12px; border-radius: 10px; white-space: pre-wrap; word-wrap: break-word; line-height: 1.45; max-width: 95%; font-size: 13px; }
+.bubble.user { align-self: flex-end; background: #f3e6e8; }
+.bubble.assistant { align-self: flex-start; background: #f7f4f0; border: 1px solid var(--line); }
+.bubble.error { align-self: flex-start; background: #fde7e5; color: var(--err); }
+.bubble.thinking { color: var(--muted); font-style: italic; }
+.tools-used { margin-top: 6px; display: flex; flex-wrap: wrap; gap: 4px; }
+.tools-used .pill { font-size: 10px; }
+.chat-input textarea { flex: 1; width: auto; min-height: 44px; }
+.proposals .proposal { border-top: 1px solid var(--line); padding: 12px 0; }
+.proposals .proposal:last-child { padding-bottom: 0; }
+.content-preview { background: #fbf8f4; border: 1px solid var(--line); border-radius: 8px; padding: 8px 12px; margin-top: 6px; }
+.content-preview ul { margin: 4px 0; padding-left: 18px; }
+.bubble.assistant { white-space: normal; }
+.md p { margin: 0 0 6px; }
+.md p:last-child { margin-bottom: 0; }
+.md ul, .md ol { margin: 2px 0 6px; padding-left: 18px; }
+.md-table { overflow-x: auto; margin: 4px 0 8px; }
+.md-table table { font-size: 12px; background: #fff; border: 1px solid var(--line); border-radius: 6px; }
+.md-table th, .md-table td { padding: 5px 8px; vertical-align: top; }

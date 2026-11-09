@@ -318,3 +318,28 @@ CREATE TABLE IF NOT EXISTS product_templates (
 CREATE INDEX IF NOT EXISTS idx_listings_account ON listings(account_id);
 CREATE INDEX IF NOT EXISTS idx_orders_account_date ON orders(account_id, order_date);
 CREATE INDEX IF NOT EXISTS idx_settlements_account_date ON settlements(account_id, settlement_date);
+
+-- ---------- OpenClaw marketplace agents ----------
+-- One chat history per marketplace agent (meesho / flipkart / amazon), shown on the Agents page.
+CREATE TABLE IF NOT EXISTS agent_messages (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    marketplace TEXT NOT NULL CHECK (marketplace IN ('amazon', 'flipkart', 'meesho')),
+    role TEXT NOT NULL CHECK (role IN ('user', 'assistant', 'error')),
+    content TEXT NOT NULL,
+    tools TEXT,                      -- JSON list of Seller Desk tools the agent called for this reply
+    created_at TEXT DEFAULT (datetime('now'))
+);
+
+-- Changes an agent proposed. Nothing is applied until the user approves it on the Agents page.
+CREATE TABLE IF NOT EXISTS agent_proposals (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    marketplace TEXT NOT NULL CHECK (marketplace IN ('amazon', 'flipkart', 'meesho')),
+    kind TEXT NOT NULL,              -- master_stock / listing_status / content_draft / task
+    payload TEXT NOT NULL,           -- JSON arguments for the change
+    summary TEXT NOT NULL,
+    reason TEXT,
+    status TEXT NOT NULL DEFAULT 'pending' CHECK (status IN ('pending', 'applied', 'rejected', 'failed')),
+    result TEXT,
+    created_at TEXT DEFAULT (datetime('now')),
+    decided_at TEXT
+);

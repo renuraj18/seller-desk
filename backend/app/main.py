@@ -7,7 +7,7 @@ from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 
 from .db import init_db
-from .routers import connections, content, extension, learn, listings, media, orders, product_templates, products, setup, templates
+from .routers import agents, connections, content, extension, learn, listings, media, orders, product_templates, products, setup, templates
 
 @asynccontextmanager
 async def lifespan(_app):
@@ -20,7 +20,7 @@ app.add_middleware(CORSMiddleware, allow_origins=["http://localhost:5173"],
                    allow_origin_regex=r"chrome-extension://[a-p]{32}", allow_methods=["*"], allow_headers=["*"])
 
 for r in (setup.router, products.router, product_templates.router, listings.router, templates.router, connections.router, content.router,
-          extension.router, media.router, orders.router, learn.router):
+          extension.router, media.router, orders.router, learn.router, agents.router):
     app.include_router(r)
 
 
@@ -54,6 +54,11 @@ if DIST.exists():
 
     @app.get("/{path:path}")
     def spa(path: str):
+        # Port 8000 is also the usual port for local model servers, and tools probe it for /health and /v1/models.
+        # Answer those (and unknown API paths) with 404 instead of the app page so nothing mistakes us for one.
+        if path == "health" or path.startswith(("api/", "v1/", "assets/")):
+            from fastapi import HTTPException
+            raise HTTPException(404)
         f = DIST / path
         if path and f.is_file() and DIST in f.resolve().parents:
             return FileResponse(f)

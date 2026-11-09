@@ -1,7 +1,7 @@
 from typing import Literal
 
 from fastapi import APIRouter, HTTPException
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 from ..db import get_conn, row_to_dict, rows_to_dicts
 
@@ -14,6 +14,8 @@ class FirmIn(BaseModel):
     state: str | None = None
     address: str | None = None
     pincode: str | None = None
+    # OpenClaw browser profile the marketplace agents use for this firm's seller panels
+    browser_profile: str | None = Field(None, pattern=r"^[a-z0-9][a-z0-9-]{0,63}$")
 
 
 class AccountIn(BaseModel):
@@ -30,6 +32,8 @@ class AccountIn(BaseModel):
     return_price_less: float = 30
     active: bool = True
     notes: str | None = None
+    # text that appears only in this account's seller-panel address (e.g. Meesho's "3ylgo"); used for live reads
+    panel_match: str | None = Field(None, max_length=100)
 
 
 @router.get("/firms")
@@ -44,8 +48,8 @@ def list_firms():
 def create_firm(f: FirmIn):
     with get_conn() as c:
         try:
-            cur = c.execute("INSERT INTO firms (name, gstin, state, address, pincode) VALUES (?,?,?,?,?)",
-                            (f.name, f.gstin, f.state, f.address, f.pincode))
+            cur = c.execute("INSERT INTO firms (name, gstin, state, address, pincode, browser_profile) "
+                            "VALUES (?,?,?,?,?,?)", (f.name, f.gstin, f.state, f.address, f.pincode, f.browser_profile))
         except Exception as e:
             raise HTTPException(400, f"Could not save firm: {e}")
         return row_to_dict(c.execute("SELECT * FROM firms WHERE id=?", (cur.lastrowid,)).fetchone())
@@ -54,8 +58,8 @@ def create_firm(f: FirmIn):
 @router.put("/firms/{firm_id}")
 def update_firm(firm_id: int, f: FirmIn):
     with get_conn() as c:
-        c.execute("UPDATE firms SET name=?, gstin=?, state=?, address=?, pincode=? WHERE id=?",
-                  (f.name, f.gstin, f.state, f.address, f.pincode, firm_id))
+        c.execute("UPDATE firms SET name=?, gstin=?, state=?, address=?, pincode=?, browser_profile=? WHERE id=?",
+                  (f.name, f.gstin, f.state, f.address, f.pincode, f.browser_profile, firm_id))
         return row_to_dict(c.execute("SELECT * FROM firms WHERE id=?", (firm_id,)).fetchone())
 
 
@@ -79,15 +83,18 @@ def list_accounts():
 
 def _save_account(c, a: AccountIn, account_id: int | None = None):
     vals = (a.firm_id, a.marketplace, a.name, a.seller_id, a.store_name, a.brand, a.sku_prefix or "", a.price_markup_pct,
-            a.price_add, a.price_round_to, a.return_price_less, int(a.active), a.notes)
+            a.price_add, a.price_round_to, a.return_price_less, int(a.active), a.notes,
+            (a.panel_match or "").strip() or None)
     try:
         if account_id:
             c.execute("UPDATE accounts SET firm_id=?, marketplace=?, name=?, seller_id=?, store_name=?, brand=?, sku_prefix=?, "
-                      "price_markup_pct=?, price_add=?, price_round_to=?, return_price_less=?, active=?, notes=? WHERE id=?",
+                      "price_markup_pct=?, price_add=?, price_round_to=?, return_price_less=?, active=?, notes=?, panel_match=? "
+                      "WHERE id=?",
                       (*vals, account_id))
             return account_id
         cur = c.execute("INSERT INTO accounts (firm_id, marketplace, name, seller_id, store_name, brand, sku_prefix, "
-                        "price_markup_pct, price_add, price_round_to, return_price_less, active, notes) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)",
+                        "price_markup_pct, price_add, price_round_to, return_price_less, active, notes, panel_match) "
+                        "VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
                         vals)
         return cur.lastrowid
     except Exception as e:

@@ -42,9 +42,9 @@ export default function Setup() {
           <button className="primary" onClick={() => setFirm({ name: '', gstin: '', state: '', address: '', pincode: '' })}>Add firm</button></div>
         {firms.data?.length === 0 ? <Empty>Add your first firm.</Empty> : (
           <div className="table-wrap"><table>
-            <thead><tr><th>Name</th><th>GSTIN</th><th>State</th><th className="num">Accounts</th><th /></tr></thead>
+            <thead><tr><th>Name</th><th>GSTIN</th><th>State</th><th>Agent browser</th><th className="num">Accounts</th><th /></tr></thead>
             <tbody>{firms.data?.map((f) => (
-              <tr key={f.id}><td>{f.name}</td><td>{f.gstin || '—'}</td><td>{f.state || '—'}</td><td className="num">{f.account_count}</td>
+              <tr key={f.id}><td>{f.name}</td><td>{f.gstin || '—'}</td><td>{f.state || '—'}</td><td>{f.browser_profile ? <code>{f.browser_profile}</code> : '—'}</td><td className="num">{f.account_count}</td>
                 <td className="num"><button className="ghost" onClick={() => setFirm(f)}>Edit</button><button className="ghost danger" onClick={() => delFirm(f)}>Delete</button></td></tr>
             ))}</tbody>
           </table></div>
@@ -74,6 +74,10 @@ export default function Setup() {
           ))}
           <div className="field"><label>Address</label><textarea value={firm.address || ''} onChange={(e) => setFirm({ ...firm, address: e.target.value })} />
             <div className="help">Used for Manufacturer / Packer address on marketplace forms.</div></div>
+          <div className="field"><label>Agent browser profile</label>
+            <input placeholder="e.g. firm-shanthi-tex" value={firm.browser_profile || ''}
+              onChange={(e) => setFirm({ ...firm, browser_profile: e.target.value.trim().toLowerCase() || null })} />
+            <div className="help">OpenClaw browser profile signed in to this firm&apos;s seller panels. The marketplace agents use it for live, read-only checks.</div></div>
           <div className="row"><span className="spacer" /><button onClick={() => setFirm(null)}>Cancel</button><button className="primary" disabled={!firm.name} onClick={saveFirm}>Save</button></div>
         </Modal>
       )}
@@ -89,6 +93,8 @@ export default function Setup() {
               <div className="help">As shown in the seller panel. The extension uses it to detect which account is logged in.</div></div>
             <div className="field"><label>Store / display name on the portal</label><input value={acc.store_name || ''} onChange={(e) => setAcc({ ...acc, store_name: e.target.value })} />
               <div className="help">Also used for account detection.</div></div>
+            <div className="field"><label>Live panel code</label><input value={acc.panel_match || ''} placeholder="e.g. 3ylgo" onChange={(e) => setAcc({ ...acc, panel_match: e.target.value })} />
+              <div className="help">Text found only in this account&apos;s seller-panel address. The agents&apos; live reads use the tab whose address contains it.</div></div>
             <div className="field"><label>Brand on this account</label><input value={acc.brand || ''} onChange={(e) => setAcc({ ...acc, brand: e.target.value })} /></div>
             <div className="field"><label>SKU prefix</label><input value={acc.sku_prefix || ''} placeholder="e.g. SS-AMZ-" onChange={(e) => setAcc({ ...acc, sku_prefix: e.target.value })} />
               <div className="help">Added to the master SKU when this account has no SKU of its own.</div></div>

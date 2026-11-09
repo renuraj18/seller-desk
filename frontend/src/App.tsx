@@ -17,9 +17,10 @@ import Extension from './pages/Extension'
 import Inventory from './pages/Inventory'
 import ImportFolder from './pages/ImportFolder'
 import Orders from './pages/Orders'
+import Agents from './pages/Agents'
 
 const NAV = [
-  { group: 'Overview', items: [['/', 'Dashboard']] },
+  { group: 'Overview', items: [['/', 'Dashboard'], ['/agents', 'Marketplace agents']] },
   { group: 'Catalog', items: [['/products', 'Products'], ['/product-templates', 'Product templates'], ['/inventory', 'Inventory'], ['/keywords', 'SEO keywords'], ['/listings', 'Listings by account']] },
   { group: 'Orders & money', items: [['/orders', 'Orders & shipments'], ['/payments', 'Payments & P&L']] },
   { group: 'Marketplaces', items: [['/extension', 'Browser extension'], ['/connections', 'Connections & sync'], ['/matching', 'SKU matching'], ['/templates', 'Upload templates']] },
@@ -53,6 +54,7 @@ export default function App() {
           <Route path="/inventory" element={<Inventory />} />
           <Route path="/extension" element={<Extension />} />
           <Route path="/orders" element={<Orders />} />
+          <Route path="/agents" element={<Agents />} />
           <Route path="/listings" element={<Listings />} />
           <Route path="/templates" element={<Templates />} />
           <Route path="/templates/:id" element={<TemplateEdit />} />

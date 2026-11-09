@@ -9,8 +9,7 @@ import openpyxl
 import pytest
 from openpyxl.worksheet.datavalidation import DataValidation
 
-TMP = tempfile.mkdtemp()
-os.environ["SELLER_DESK_DATA"] = TMP
+TMP = os.environ.setdefault("SELLER_DESK_DATA", tempfile.mkdtemp())  # one data dir per pytest run
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from fastapi.testclient import TestClient  # noqa: E402

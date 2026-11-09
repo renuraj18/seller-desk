@@ -9,7 +9,7 @@ DB_PATH = DATA_DIR / "seller_desk.db"
 UPLOAD_DIR = DATA_DIR / "templates"
 EXPORT_DIR = DATA_DIR / "exports"
 
-JSON_COLUMNS = {"images", "extra", "columns", "mapping", "warnings", "raw", "bullets", "issues", "value_map"}
+JSON_COLUMNS = {"images", "extra", "columns", "mapping", "warnings", "raw", "bullets", "issues", "value_map", "payload", "tools"}
 
 
 def init_dirs():
@@ -55,6 +55,8 @@ MIGRATIONS = [
     ("orders", "awb", "TEXT"),
     ("orders", "source", "TEXT"),
     ("orders", "updated_at", "TEXT"),
+    ("firms", "browser_profile", "TEXT"),
+    ("accounts", "panel_match", "TEXT"),      # text unique to this account's seller-panel address, e.g. 3ylgo   # OpenClaw browser profile signed in to this firm's seller panels
 ]
 
 
