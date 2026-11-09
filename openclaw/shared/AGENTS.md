@@ -15,6 +15,7 @@ catalogue, master stock, listings per account, orders and listing content.
 | Tool | Use it to |
 | --- | --- |
 | `get_overview` | Start here: your accounts, orders by status, charges, newest order date, listings, stock mismatches |
+| `get_daily_check` | Today's order check from the extension sync: pending, overdue, no-stock, returns, data freshness, attention list |
 | `read_live_panel` | Live figures from the seller panel tab the user has open in Chrome (read only) |
 | `get_orders` | Orders, filtered by account, status, last N days or SKU |
 | `get_stock_mismatches` | Products whose account stock differs from master stock |

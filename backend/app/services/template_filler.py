@@ -12,13 +12,24 @@ import openpyxl
 from openpyxl.utils import get_column_letter, range_boundaries
 
 from ..fields import guess_source, normalise
+from . import catalogs, image_links
 from .ai_writer import content_for_export
 from .pricing import account_price, account_sku
 
 SKIP_SHEET_WORDS = ("instruction", "valid value", "definition", "example", "readme", "help", "guide",
-                    "dropdown", "lookup", "browse", "image", "icon", "sample", "data validation")
+                    "dropdown", "lookup", "browse", "image", "icon", "sample", "data validation", "validation sheet",
+                    "return reason")
 NON_DATA_HINTS = ("mandatory", "optional", "required", "example", "e.g", "eg:", "please", "enter ",
-                  "select ", "accepted", "maximum", "minimum", "characters", "description")
+                  "select ", "accepted", "maximum", "minimum", "characters", "description", "tutorial", "explainer video",
+                  "sheet'!")
+
+
+def header_text(v) -> str:
+    """A header cell that also holds its help text (Meesho: '\n\nProduct Name\n\nPlease enter ...') is just its first line."""
+    s = str(v if v is not None else "")
+    if "\n" in s:
+        s = next((line.strip() for line in s.splitlines() if line.strip()), "")
+    return s.strip()
 
 
 # ---------------------------------------------------------------- loading
@@ -58,7 +69,8 @@ def _score_header_row(values) -> tuple[float, int]:
         if v is None or str(v).strip() == "":
             continue
         nonempty += 1
-        if len(str(v)) > 80:     # instructions, not headers
+        v = header_text(v)
+        if len(v) > 80:          # instructions, not headers
             continue
         src, _ = guess_source(v)
         if src:
@@ -67,7 +79,7 @@ def _score_header_row(values) -> tuple[float, int]:
 
 
 def _looks_like_non_data(values) -> bool:
-    texts = [str(v) for v in values if v not in (None, "")]
+    texts = [str(v) for v in values if v not in (None, "") and not str(v).startswith("=")]   # formula cells are template rows to fill
     if not texts:
         return False
     long = sum(1 for t in texts if len(t) > 35)
@@ -186,12 +198,14 @@ def analyse(path: Path, sheet: str | None = None, header_row: int | None = None,
     label_row = layout["header_row"] - 1 if layout["header_row"] > 1 else None
     columns, mapping = [], {}
     for c in range(1, max_col + 1):
-        header = ws.cell(row=layout["header_row"], column=c).value
-        if header in (None, ""):
+        header = header_text(ws.cell(row=layout["header_row"], column=c).value)
+        if header == "":
             continue
         letter = get_column_letter(c)
         label = ws.cell(row=label_row, column=c).value if label_row else None
         caption = str(label).strip() if label and len(str(label)) < 80 else None
+        if caption and re.search(r"compulsory|optional field|mandatory|recommended|do not fill", caption, re.I):
+            caption = None            # a requirement flag (Meesho row 2), not a column caption
         src, _ = guess_source(header)
         if not src and caption:
             src, _ = guess_source(caption)
@@ -233,6 +247,8 @@ def resolve_value(source: str, const_value, product: dict, account: dict, listin
     if source.startswith("image."):
         i = int(source.split(".")[1]) - 1
         imgs = product.get("images") or []
+        if "image_links" in product:        # Meesho: only links made by its Image link Generator work in the sheet
+            imgs = product["image_links"]
         return imgs[i] if i < len(imgs) else None
     if source.startswith("gen."):
         key = source[4:]
@@ -243,8 +259,7 @@ def resolve_value(source: str, const_value, product: dict, account: dict, listin
     if source == "listing.sku":
         return account_sku(product, account, listing)
     if source == "listing.parent_sku":
-        parent = product.get("parent_sku")
-        return f"{account.get('sku_prefix') or ''}{parent}" if parent else None
+        return catalogs.account_parent(product.get("parent_sku"), account.get("sku_prefix"), (listing or {}).get("catalog_no"))
     if source == "listing.price":
         return _fmt_number(account_price(product, account, listing))
     if source == "listing.return_price":
@@ -299,6 +314,10 @@ def fill(profile: dict, products: list[dict], account: dict, listings: dict[int,
     shutil.copyfile(src_path, out_path)
     wb = load_workbook(out_path)
     ws = wb[profile["sheet_name"]]
+    if account["marketplace"] == "meesho":
+        links = image_links.get([p["id"] for p in products], "meesho")
+        for p in products:
+            p["image_links"] = links.get(p["id"], [])
     allowed_by_letter = {c["letter"]: c.get("allowed") or [] for c in profile["columns"]}
     header_by_letter = {c["letter"]: c.get("label") or c["header"] for c in profile["columns"]}
     warnings: list[dict] = []
@@ -318,6 +337,9 @@ def fill(profile: dict, products: list[dict], account: dict, listings: dict[int,
             vmap = m.get("value_map") or {}
             if value is not None and str(value) in vmap:
                 value = vmap[str(value)]
+            if source.startswith("image.") and "image_links" in product and value is None and source == "image.1":
+                warnings.append({"sku": product["sku"], "column": header_by_letter.get(letter, letter), "value": "",
+                                 "issue": "no image link: make it in Meesho's Image link Generator and import it (Products → Image links)"})
             value, ok = _match_allowed(value, allowed_by_letter.get(letter, []))
             if not ok:
                 warnings.append({"sku": product["sku"], "column": header_by_letter.get(letter, letter),

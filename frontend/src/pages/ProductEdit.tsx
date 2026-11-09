@@ -218,7 +218,7 @@ function ContentEditor({ productId, marketplace }: { productId: number; marketpl
           <div className="field" key={i}><label className="row">Bullet {i + 1} <span className="spacer" /><Counter n={b.length} max={rules.bullet_max} /></label>
             <textarea rows={2} value={b} onChange={(e) => { const n = [...bullets]; n[i] = e.target.value; setD({ ...d, bullets: n }) }} /></div>
         ))}
-        <div className="field"><label className="row">Description <span className="spacer" /><span className="counter">{(d.description || '').length}</span></label>
+        <div className="field"><label className="row">Description <span className="spacer" />{rules.description_max ? <Counter n={(d.description || '').length} max={rules.description_max} /> : <span className="counter">{(d.description || '').length}</span>}</label>
           <textarea rows={6} value={d.description || ''} onChange={(e) => setD({ ...d, description: e.target.value })} /></div>
         <div className="field"><label className="row">Search keywords <span className="spacer" />
           {marketplace === 'amazon' ? <Counter n={new TextEncoder().encode(d.search_terms || '').length} max={rules.search_terms_max_bytes} /> : null}</label>

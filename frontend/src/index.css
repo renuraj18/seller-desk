@@ -156,3 +156,7 @@ td.num, th.num { text-align: right; font-variant-numeric: tabular-nums; }
 .md-table { overflow-x: auto; margin: 4px 0 8px; }
 .md-table table { font-size: 12px; background: #fff; border: 1px solid var(--line); border-radius: 6px; }
 .md-table th, .md-table td { padding: 5px 8px; vertical-align: top; }
+
+/* daily order check */
+.summary { background: #fbf8f4; border: 1px solid var(--line); border-radius: 8px; padding: 10px 12px; font-size: 13px; min-height: 80px; }
+.summary-err { color: var(--err); }

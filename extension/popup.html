@@ -7,6 +7,7 @@
   header { background: #2a1a1d; color: #fff; padding: 10px 12px; font-weight: 700; }
   main { padding: 12px; }
   label { display: block; font-size: 11px; color: #7a6f66; font-weight: 600; margin-bottom: 4px; }
+  select { width: 100%; box-sizing: border-box; border: 1px solid #e0d6cb; border-radius: 8px; padding: 7px 9px; font: inherit; background: #fff; }
   input { width: 100%; box-sizing: border-box; border: 1px solid #e0d6cb; border-radius: 8px; padding: 7px 9px; font: inherit; }
   button { margin-top: 8px; background: #7a1f2b; color: #fff; border: 0; border-radius: 8px; padding: 7px 12px; font: inherit; cursor: pointer; }
   .st { margin: 10px 0 0; font-size: 12px; }
@@ -21,6 +22,9 @@
   <input id="url" placeholder="http://localhost:8000">
   <button id="save">Save &amp; check</button>
   <p class="st" id="status">Checking…</p>
+  <label for="firm" style="margin-top:12px">This Chrome profile belongs to firm</label>
+  <select id="firm"><option value="">Not set: no automatic order sync</option></select>
+  <p class="st" id="firmInfo">Automatic order sync runs for this firm's taught order pages, while Chrome is open.</p>
   <ul>
     <li>Open the add-product page on Meesho, Flipkart or Amazon Seller Central.</li>
     <li>Use the <b>Seller Desk</b> button at the bottom right of the page.</li>

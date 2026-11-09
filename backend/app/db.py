@@ -56,6 +56,13 @@ MIGRATIONS = [
     ("orders", "source", "TEXT"),
     ("orders", "updated_at", "TEXT"),
     ("firms", "browser_profile", "TEXT"),
+    ("orders", "stock_effect", "INTEGER"),     # units this order has taken out of master stock (NULL = not tracked)
+    ("orders", "first_seen_at", "TEXT"),
+    ("upload_jobs", "detail", "TEXT"),          # JSON: what the extension could not fill, for fixing the portal's form
+    ("product_templates", "variations_dir", "TEXT"),   # folder on this PC holding the colour variations of a design
+    ("sync_pages", "kind", "TEXT DEFAULT 'orders'"),   # orders = daily order read, stock = inventory page the extension pushes stock to
+    ("listings", "catalog_no", "INTEGER"),     # which catalog of a design this listing sits in (Meesho allows 9 per catalog)
+    ("accounts", "add_catalog_url", "TEXT"),   # the portal's add-catalog page, taught through the extension
     ("accounts", "panel_match", "TEXT"),      # text unique to this account's seller-panel address, e.g. 3ylgo   # OpenClaw browser profile signed in to this firm's seller panels
 ]
 

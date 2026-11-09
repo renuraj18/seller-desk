@@ -14,9 +14,22 @@ async function check() {
   }
 }
 
+const firmBox = document.getElementById('firm')
+async function loadFirms() {
+  const { firmId } = await chrome.storage.local.get('firmId')
+  const r = await chrome.runtime.sendMessage({ type: 'api', path: '/api/firms' }).catch(() => null)
+  if (!r || !r.ok) return
+  r.data.forEach((f) => firmBox.add(new Option(f.name, f.id)))
+  firmBox.value = firmId || ''
+}
+firmBox.addEventListener('change', async () => {
+  await chrome.storage.local.set({ firmId: firmBox.value ? Number(firmBox.value) : null })
+  document.getElementById('firmInfo').textContent = firmBox.value ? 'Saved. This profile will sync that firm\'s order pages.' : 'Automatic order sync is off for this profile.'
+})
+
 chrome.storage.local.get('serverUrl').then(({ serverUrl }) => {
   urlBox.value = serverUrl || 'http://localhost:8000'
-  check()
+  check().then(loadFirms)
 })
 
 document.getElementById('save').addEventListener('click', async () => {

@@ -4,6 +4,7 @@ from pydantic import BaseModel
 
 from ..db import get_conn, rows_to_dicts
 from ..services import orders as svc
+from ..services import stock
 
 router = APIRouter(tags=["orders"])
 XLSX = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
@@ -66,6 +67,7 @@ def edit_order(order_id: int, body: OrderEdit):
         c.execute("UPDATE orders SET status=COALESCE(?, status), cancel_charges=?, return_charges=?, "
                   "awb=COALESCE(?, awb), updated_at=datetime('now') WHERE id=?",
                   (body.status, body.cancel_charges, body.return_charges, body.awb, order_id))
+    stock.reconcile_orders()
     svc.write_master()
     return {"ok": True}
 
@@ -73,6 +75,7 @@ def edit_order(order_id: int, body: OrderEdit):
 @router.delete("/api/orders/{order_id}")
 def delete_order(order_id: int):
     with get_conn() as c:
+        stock.release_order(c, order_id)
         c.execute("DELETE FROM orders WHERE id=?", (order_id,))
     svc.write_master()
     return {"ok": True}

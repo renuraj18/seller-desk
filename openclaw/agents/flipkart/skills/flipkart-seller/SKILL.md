@@ -9,6 +9,11 @@ Use this whenever the user asks about Flipkart orders, returns, stock or listing
 
 ## Daily check
 
+Call `get_daily_check` first. Seller Desk has already worked out pending, overdue and no-stock orders, returns and how
+fresh the data is from the browser extension's sync. Report from it; use the other tools only for detail. Add an
+`add_task` for each item only the user can do (sign in again, dispatch overdue orders, fix a stock gap).
+
+
 1. `get_overview`. Note each account's newest order date.
 2. `get_orders` with `status: "pending"` per account: these need dispatch before the SLA. Report counts and the
    oldest pending order date per account.

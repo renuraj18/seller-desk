@@ -22,7 +22,7 @@ export default function Templates() {
 
   return (
     <>
-      <PageHead title="Upload templates" sub="Upload the blank category template from each seller panel once. Seller Desk fills it for any account and products.">
+      <PageHead title="4b. Upload with an Excel template" sub={<>Upload the blank category sheet from a seller panel once. Seller Desk fills it for any account and sarees, and you upload the file yourself. To fill the portal form directly instead, use <Link to="/uploads">4a. Upload with extension</Link>.</>}>
         <button className="primary" onClick={() => setUpload({ name: '', marketplace: 'meesho', file: null })}>Add template</button>
       </PageHead>
       {preselected.length > 0 && <div className="notice info">{preselected.length} products selected. Choose a template below and click <b>Fill</b>.</div>}

@@ -1,9 +1,11 @@
 from typing import Literal
 
 from fastapi import APIRouter, HTTPException
+from pydantic import BaseModel, Field
 
 from ..db import get_conn, row_to_dict, rows_to_dicts
 from ..fields import PRODUCT_FIELD_KEYS
+from ..services import variations
 
 router = APIRouter(prefix="/api", tags=["product_templates"])
 
@@ -16,6 +18,51 @@ TEMPLATE_FIELDS = {
     "country_of_origin", "manufacturer_details", "packer_details",
     "description", "keywords", "brand"
 }
+
+def _check_dir(data: dict):
+    """variations_dir must be an existing folder on this PC (stored as an absolute path), or empty to clear it."""
+    if "variations_dir" not in data:
+        return
+    raw = (data["variations_dir"] or "").strip()
+    if not raw:
+        data["variations_dir"] = None
+        return
+    try:
+        data["variations_dir"] = str(variations.resolve_dir(raw))
+    except ValueError as e:
+        raise HTTPException(400, str(e))
+
+
+@router.get("/product-templates/{template_id}/variations")
+def scan_variations(template_id: int):
+    """What the template's variations folder holds: designs and their colours with photo counts. Writes nothing."""
+    try:
+        return variations.scan_for_template(template_id)
+    except LookupError as e:
+        raise HTTPException(404, str(e))
+    except ValueError as e:
+        raise HTTPException(400, str(e))
+
+
+class VariationImport(BaseModel):
+    parent_sku: str = Field(min_length=1, max_length=60)
+    design: str | None = None              # which design folder, when the folder holds several
+    colours: list[str] | None = None       # only these colours (default: all that are new)
+    attributes: dict = {}                  # overrides on top of the template's defaults
+    account_ids: list[int] = []            # add the new sarees as draft listings on these accounts
+
+
+@router.post("/product-templates/{template_id}/variations/import")
+def import_variations(template_id: int, body: VariationImport):
+    """Create one saree per new colour from the variations folder, with the template's defaults and the folder's photos."""
+    try:
+        return variations.import_for_template(template_id, body.parent_sku, body.design, body.colours, body.attributes,
+                                              body.account_ids)
+    except LookupError as e:
+        raise HTTPException(404, str(e))
+    except ValueError as e:
+        raise HTTPException(400, str(e))
+
 
 @router.get("/product-templates")
 def list_templates():
@@ -54,9 +101,10 @@ def get_template(template_id: int):
 @router.post("/product-templates")
 def create_template(data: dict):
     # Filter only allowed fields
-    template_data = {k: v for k, v in data.items() if k in TEMPLATE_FIELDS or k in ("name", "match_fabric", "match_saree_type", "active")}
+    template_data = {k: v for k, v in data.items() if k in TEMPLATE_FIELDS or k in ("name", "match_fabric", "match_saree_type", "active", "variations_dir")}
     if not template_data.get("name"):
         raise HTTPException(400, "Template name is required")
+    _check_dir(template_data)
     
     with get_conn() as c:
         # Check name uniqueness
@@ -75,9 +123,10 @@ def create_template(data: dict):
 
 @router.put("/product-templates/{template_id}")
 def update_template(template_id: int, data: dict):
-    template_data = {k: v for k, v in data.items() if k in TEMPLATE_FIELDS or k in ("name", "match_fabric", "match_saree_type", "active")}
+    template_data = {k: v for k, v in data.items() if k in TEMPLATE_FIELDS or k in ("name", "match_fabric", "match_saree_type", "active", "variations_dir")}
     if not template_data:
         raise HTTPException(400, "No valid fields to update")
+    _check_dir(template_data)
     
     with get_conn() as c:
         # Check name uniqueness if changed

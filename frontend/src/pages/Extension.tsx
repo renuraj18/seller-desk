@@ -25,7 +25,9 @@ export default function Extension() {
             <li>In Chrome open <code>chrome://extensions</code> and switch on <b>Developer mode</b> (top right).</li>
             <li>Click <b>Load unpacked</b> and choose the unzipped folder.</li>
             <li>Pin it from the puzzle-piece menu. Its popup should say <b>Connected</b> while Seller Desk is running.</li>
+            <li>In the popup pick <b>which firm this Chrome profile belongs to</b>. That switches on the automatic order sync below.</li>
           </ol>
+          <p className="small"><b>Updating the extension:</b> download it again, replace the files in your folder, then press the reload arrow on <code>chrome://extensions</code>.</p>
           <p className="muted small">Tip: use a separate Chrome profile for each firm so each stays logged in to its own Meesho, Flipkart and Amazon accounts. Install the extension in each profile.</p>
         </div>
         <div className="card">

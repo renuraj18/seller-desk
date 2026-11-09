@@ -343,3 +343,83 @@ CREATE TABLE IF NOT EXISTS agent_proposals (
     created_at TEXT DEFAULT (datetime('now')),
     decided_at TEXT
 );
+
+-- ---------- Daily order check: pages the browser extension syncs by itself ----------
+-- An order page taught to the extension ("Add to daily sync"). The extension opens it in the background,
+-- reads the order rows and sends them to Seller Desk.
+CREATE TABLE IF NOT EXISTS sync_pages (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    account_id INTEGER NOT NULL REFERENCES accounts(id) ON DELETE CASCADE,
+    url TEXT NOT NULL,
+    status TEXT,                     -- status to use for rows that show none (e.g. Pending, Cancelled)
+    tab_label TEXT,                  -- tab shown when taught; the extension clicks it if the page opens on another
+    label TEXT,
+    last_run_at TEXT,
+    last_state TEXT,                 -- ok / empty / signed_out / error
+    last_rows INTEGER,
+    last_error TEXT,
+    UNIQUE (account_id, url)
+);
+
+-- One sync of one firm's pages (the extension in that firm's Chrome profile does the work).
+CREATE TABLE IF NOT EXISTS order_syncs (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    firm_id INTEGER NOT NULL REFERENCES firms(id) ON DELETE CASCADE,
+    trigger TEXT NOT NULL,           -- schedule / manual
+    status TEXT NOT NULL,            -- requested / running / done
+    slot TEXT,                       -- schedule slot this run covers, e.g. 2026-11-09 08:30
+    created_at TEXT DEFAULT (datetime('now')),
+    started_at TEXT,
+    finished_at TEXT,
+    summary TEXT
+);
+
+-- ---------- Inventory ledger: every change to master stock, with the reason ----------
+CREATE TABLE IF NOT EXISTS stock_moves (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    product_id INTEGER NOT NULL REFERENCES products(id) ON DELETE CASCADE,
+    delta INTEGER NOT NULL,
+    qty_after INTEGER,
+    reason TEXT NOT NULL,            -- manual / set / order_sold / order_restock / order_deleted / agent / import
+    note TEXT,
+    account_id INTEGER REFERENCES accounts(id) ON DELETE SET NULL,
+    order_ref TEXT,
+    created_at TEXT DEFAULT (datetime('now'))
+);
+CREATE INDEX IF NOT EXISTS idx_stock_moves_product ON stock_moves (product_id, id DESC);
+
+-- ---------- New catalog upload queue: the extension fills each portal's add-catalog form ----------
+CREATE TABLE IF NOT EXISTS upload_jobs (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    account_id INTEGER NOT NULL REFERENCES accounts(id) ON DELETE CASCADE,
+    product_id INTEGER NOT NULL REFERENCES products(id) ON DELETE CASCADE,
+    status TEXT NOT NULL DEFAULT 'queued',   -- queued / filling / filled / submitted / failed / cancelled
+    message TEXT,
+    attempts INTEGER DEFAULT 0,
+    created_at TEXT DEFAULT (datetime('now')),
+    updated_at TEXT DEFAULT (datetime('now'))
+);
+CREATE INDEX IF NOT EXISTS idx_upload_jobs_account ON upload_jobs (account_id, status);
+
+-- ---------- Automatic stock push: the extension sets master stock on each portal's inventory page ----------
+-- Inventory pages are taught as sync_pages with kind='stock'. One run covers one firm's pages.
+CREATE TABLE IF NOT EXISTS stock_runs (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    firm_id INTEGER NOT NULL REFERENCES firms(id) ON DELETE CASCADE,
+    trigger TEXT NOT NULL,           -- schedule / manual / after_orders
+    status TEXT NOT NULL,            -- requested / running / done
+    slot TEXT,
+    created_at TEXT DEFAULT (datetime('now')),
+    started_at TEXT,
+    finished_at TEXT,
+    summary TEXT
+);
+
+-- ---------- Marketplace image links (Meesho's Image link Generator gives public links; local photos cannot be used in its sheet) ----------
+CREATE TABLE IF NOT EXISTS image_links (
+    product_id INTEGER NOT NULL REFERENCES products(id) ON DELETE CASCADE,
+    marketplace TEXT NOT NULL,
+    links TEXT NOT NULL DEFAULT '[]',         -- JSON list, position 1 = front image
+    updated_at TEXT DEFAULT (datetime('now')),
+    PRIMARY KEY (product_id, marketplace)
+);

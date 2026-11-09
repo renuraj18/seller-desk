@@ -66,3 +66,11 @@ def decide(proposal_id: int, body: DecideIn):
         raise HTTPException(404, str(e))
     except ValueError as e:
         raise HTTPException(409, str(e))
+
+
+@router.post("/daily-summary")
+def daily_summary():
+    """Start the agents' summary of today's order check in the background; answers appear in each agent's chat."""
+    import threading
+    threading.Thread(target=svc.daily_summary, daemon=True).start()
+    return {"started": True}

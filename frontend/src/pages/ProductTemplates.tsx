@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { Link } from 'react-router-dom'
 import { useNavigate } from 'react-router-dom'
 import { api, type Row, money } from '../api'
 import { PageHead, Modal, toast, useLoad } from '../components/ui'
@@ -39,7 +40,7 @@ export default function ProductTemplates() {
 
   return (
     <>
-      <PageHead title="Product Templates" sub="Master defaults per saree type. Apply when creating products to pre-fill HSN, GST, blouse, shipping, compliance, etc.">
+      <PageHead title="1. Product defaults" sub={<>Reusable starting values for a kind of saree (HSN, GST, blouse, weight…), plus the folder with its colour photos. These are not sarees and not Excel templates. <Link to="/new-catalog">How it works</Link></>}>
         <button className="primary" onClick={() => { setEditing(null); setNewOpen(true) }}>New template</button>
       </PageHead>
 
@@ -107,7 +108,7 @@ export default function ProductTemplates() {
 }
 
 const GROUPS = [
-  { key: 'basics', label: 'Basics & Matching', fields: ['name', 'match_fabric', 'match_saree_type', 'brand', 'active'] },
+  { key: 'basics', label: 'Basics & Matching', fields: ['name', 'match_fabric', 'match_saree_type', 'brand', 'variations_dir', 'active'] },
   { key: 'tax_price', label: 'Tax & Price', fields: ['hsn', 'gst_rate', 'mrp', 'selling_price', 'cost_price', 'packaging_cost'] },
   { key: 'saree', label: 'Saree Attributes', fields: ['fabric', 'saree_type', 'pattern', 'work', 'border', 'pallu', 'occasion', 'saree_length_m'] },
   { key: 'blouse', label: 'Blouse', fields: ['blouse_piece', 'blouse_length_m', 'blouse_fabric', 'blouse_color'] },
@@ -122,6 +123,7 @@ const FIELD_CONFIG: Record<string, { type: string; options?: string[]; placehold
   match_fabric: { type: 'text', placeholder: 'e.g. Kanjivaram Silk, Pure Silk (comma-separated)' },
   match_saree_type: { type: 'text', placeholder: 'e.g. Kanjivaram (comma-separated)' },
   brand: { type: 'text', placeholder: 'Brand name' },
+  variations_dir: { type: 'text', placeholder: 'Full folder path, e.g. /Users/you/Sarees/Kanjivaram (one subfolder per colour)' },
   active: { type: 'checkbox', placeholder: '' },
   hsn: { type: 'text', placeholder: 'e.g. 5007' },
   gst_rate: { type: 'number', step: 0.5, placeholder: 'e.g. 5' },

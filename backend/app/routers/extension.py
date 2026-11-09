@@ -13,6 +13,7 @@ from pydantic import BaseModel
 
 from ..db import dump, get_conn, row_to_dict, rows_to_dicts
 from ..fields import _SYNONYMS, all_sources, normalise
+from ..services import catalogs
 from ..services.ai_writer import content_for_export
 from ..services.pricing import account_price, account_sku
 from ..services.template_filler import resolve_value
@@ -42,7 +43,7 @@ def context(marketplace: Market):
     """Everything the panel needs when it opens on a seller panel page."""
     with get_conn() as c:
         accounts = rows_to_dicts(c.execute(
-            "SELECT a.id, a.name, a.marketplace, a.brand, a.sku_prefix, a.seller_id, a.store_name, f.name AS firm_name, "
+            "SELECT a.id, a.name, a.marketplace, a.brand, a.sku_prefix, a.seller_id, a.store_name, a.add_catalog_url, f.name AS firm_name, "
             "(SELECT COUNT(*) FROM listings l WHERE l.account_id=a.id AND l.status='draft') AS to_list "
             "FROM accounts a JOIN firms f ON f.id=a.firm_id WHERE a.marketplace=? AND a.active=1 "
             "ORDER BY f.name, a.name", (marketplace,)))
@@ -83,12 +84,21 @@ def products(account_id: int, q: str = "", only: str = "all"):
             "content_approved": bool(d.get("approved")), "score": d.get("score"),
             "parent_sku": p["parent_sku"], "stock": p["stock_qty"],
         })
+    with get_conn() as c:
+        for item in out:      # on Meesho a design of 12 colours is two catalogs of 9 + 3
+            if item["parent_sku"]:
+                no, ids = catalogs.catalog_of(c, item["id"], account_id)
+                item["catalog_ids"] = ids
+                item["group_key"] = f"{item['parent_sku']}#{no or 1}"
+                item["catalog_parent_sku"] = catalogs.account_parent(item["parent_sku"], "", no)
+            else:
+                item["group_key"] = None
     groups: dict = {}
     for item in out:
-        if item["parent_sku"]:
-            groups.setdefault(item["parent_sku"], []).append(item)
+        if item["group_key"]:
+            groups.setdefault(item["group_key"], []).append(item)
     for item in out:
-        item["variant_count"] = len(groups.get(item["parent_sku"], [])) if item["parent_sku"] else 1
+        item["variant_count"] = len(item["catalog_ids"]) if item["group_key"] else 1
     return out
 
 
@@ -100,6 +110,7 @@ def payload(product_id: int, account_id: int):
         p = row_to_dict(c.execute("SELECT * FROM products WHERE id=?", (product_id,)).fetchone())
         if not p:
             raise HTTPException(404, "Product not found")
+        catalogs.catalog_of(c, product_id, account_id)       # places the saree in a catalog (Meesho: 9 per catalog)
         listing = row_to_dict(c.execute("SELECT * FROM listings WHERE product_id=? AND account_id=?",
                                         (product_id, account_id)).fetchone())
     gen = content_for_export(p, acc["marketplace"], brand=acc.get("brand") or None,
@@ -128,8 +139,7 @@ def payload_group(product_id: int, account_id: int):
         p = row_to_dict(c.execute("SELECT id, parent_sku FROM products WHERE id=?", (product_id,)).fetchone())
         if not p:
             raise HTTPException(404, "Product not found")
-        ids = [product_id] if not p["parent_sku"] else [r["id"] for r in c.execute(
-            "SELECT id FROM products WHERE parent_sku=? ORDER BY sku", (p["parent_sku"],))]
+        _, ids = catalogs.catalog_of(c, product_id, account_id)     # one catalog's worth: at most 9 colours on Meesho
     return [payload(i, account_id) for i in ids]
 
 

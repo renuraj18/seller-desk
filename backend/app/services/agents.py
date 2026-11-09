@@ -19,7 +19,7 @@ import requests
 from ..db import dump, get_conn, row_to_dict, rows_to_dicts
 from . import ai_writer
 from . import content as content_svc
-from . import live_panel
+from . import daily_check, live_panel, stock
 from . import orders as orders_svc
 from .secrets import get_setting
 
@@ -133,6 +133,10 @@ def _fn(name, description, props=None, required=None):
 TOOLS = [
     _fn("get_overview", "Accounts on your marketplace with their firm, order counts by status, cancel/return "
         "charges, newest order date, listing counts by status and stock mismatches. Call this first."),
+    _fn("get_daily_check", "Today's daily order check for your marketplace: per account the pending orders, overdue "
+        "and no-stock orders, returns changed in 24h, how fresh the synced data is, and the attention list. Built "
+        "by Seller Desk's own rules from the browser extension's latest sync. Prefer this for 'what needs "
+        "doing today'."),
     _fn("read_live_panel", "Read the account's seller panel LIVE from the tab the user has open in their Chrome "
         "(read only). Use when the user asks for live, current or right-now figures, or Seller Desk data is more "
         "than a day old.", {"account_id": {"type": "integer"}}, ["account_id"]),
@@ -227,6 +231,18 @@ def _overview(marketplace: str) -> dict:
     return {"marketplace": marketplace, "today": date.today().isoformat(), "accounts": accounts,
             "products_in_master": products, "products_without_approved_content": no_content,
             "your_pending_proposals": pending, "content_limits": content_svc.MARKETPLACE_RULES[marketplace]}
+
+
+def _daily_check(marketplace: str) -> dict:
+    rep = daily_check.report()
+    keep = ("name", "firm", "pending", "oldest_pending_date", "oldest_pending_days", "pending_overdue",
+            "pending_no_stock", "returns_updated_24h", "newest_order_date", "last_sync_ok", "orders_by_status")
+    return {"generated_at": rep["generated_at"], "source": "Seller Desk daily order check (extension sync)",
+            "accounts": [{**{k: a[k] for k in keep}, "account_id": a["id"],
+                          "sync": [{"page": p["label"] or p["status"], "state": p["last_state"], "rows": p["last_rows"],
+                                    "error": p["last_error"]} for p in a["sync_pages"]]}
+                         for a in rep["accounts"] if a["marketplace"] == marketplace],
+            "attention": [x for x in rep["attention"] if x["marketplace"] == marketplace]}
 
 
 def _orders(marketplace: str, args: dict) -> dict:
@@ -349,6 +365,8 @@ def _add_task(marketplace: str, args: dict) -> dict:
 def run_tool(marketplace: str, name: str, args: dict):
     if name == "get_overview":
         return _overview(marketplace)
+    if name == "get_daily_check":
+        return _daily_check(marketplace)
     if name == "read_live_panel":
         return live_panel.read(marketplace, int(args["account_id"]))
     if name == "get_orders":
@@ -495,10 +513,11 @@ def _apply(p: dict) -> str:
     data, mp = p["payload"], p["marketplace"]
     if p["kind"] == "master_stock":
         with get_conn() as c:
-            n = c.execute("UPDATE products SET stock_qty=?, updated_at=datetime('now') WHERE id=?",
-                          (max(0, int(data["stock_qty"])), data["product_id"])).rowcount
-        if not n:
-            raise ValueError("The product no longer exists.")
+            try:
+                stock.adjust(c, data["product_id"], set_to=int(data["stock_qty"]), reason="agent",
+                             note=f"Approved proposal from the {mp} agent")
+            except LookupError:
+                raise ValueError("The product no longer exists.")
         return f"Master stock set to {data['stock_qty']}."
     if p["kind"] == "listing_status":
         if data["status"] not in LISTING_STATUSES:
@@ -538,3 +557,20 @@ def decide(pid: int, approve: bool) -> dict:
         c.execute("UPDATE agent_proposals SET status=?, result=?, decided_at=datetime('now') WHERE id=?",
                   (status_, result, pid))
         return _get_proposal(c, pid)
+
+
+# ------------------------------------------------------------------ autonomous daily summary
+
+DAILY_PROMPT = ("The daily order check has just finished. Call get_daily_check, then write a short summary for the "
+                "user (at most 6 lines): what needs action today per account, most urgent first, and how fresh the "
+                "data is. Use only figures from the tool result. For work only the user can do (sign in again, "
+                "dispatch overdue orders, fix a stock gap) call add_task once per item. If everything is fine, say so.")
+
+
+def daily_summary() -> dict:
+    """Ask each marketplace agent, in parallel, to summarise today's check. Runs in the background after a sync."""
+    from concurrent.futures import ThreadPoolExecutor
+    mps = [m for m in MARKETPLACES if any(a["marketplace"] == m for a in daily_check.report()["accounts"])]
+    with ThreadPoolExecutor(max_workers=max(1, len(mps))) as pool:
+        done = list(pool.map(lambda m: (m, chat(m, DAILY_PROMPT)["message"]["role"]), mps))
+    return dict(done)

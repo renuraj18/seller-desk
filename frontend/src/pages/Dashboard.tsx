@@ -4,6 +4,7 @@ import { Empty, MpBadge, PageHead, useLoad } from '../components/ui'
 
 export default function Dashboard() {
   const { data } = useLoad<Row>(() => api.get('/api/dashboard'))
+  const check = useLoad<Row>(() => api.get('/api/daily-check'))
   if (!data) return null
   const firstRun = data.accounts === 0
   return (
@@ -19,6 +20,17 @@ export default function Dashboard() {
             <li><Link to="/settings">Add your Anthropic API key</Link> and set up <Link to="/keywords">SEO keyword sets</Link>.</li>
             <li>Draft listings with AI, then <Link to="/templates">fill the Flipkart / Meesho / Amazon templates</Link>.</li>
           </ol>
+        </div>
+      )}
+      {check.data && check.data.accounts.length > 0 && (
+        <div className="card">
+          <div className="row"><h2 style={{ margin: 0 }}>Daily order check</h2><span className="spacer" /><Link to="/daily-check">Open</Link></div>
+          <div className="row" style={{ margin: '8px 0' }}>
+            <span className="stat">{check.data.accounts.reduce((n: number, a: Row) => n + a.pending, 0)}</span><span className="muted">pending orders across {check.data.accounts.length} accounts</span>
+          </div>
+          {check.data.attention.length === 0 ? <span className="muted">Nothing needs attention.</span> : check.data.attention.slice(0, 4).map((a: Row, i: number) => (
+            <div key={i} className="small" style={{ padding: '3px 0' }}><b>{a.account}</b>: {a.text}</div>
+          ))}
         </div>
       )}
       <div className="grid g4" style={{ marginBottom: 16 }}>

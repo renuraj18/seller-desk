@@ -9,6 +9,7 @@ from pydantic import BaseModel
 
 from ..db import EXPORT_DIR, UPLOAD_DIR, dump, get_conn, row_to_dict, rows_to_dicts
 from ..fields import normalise
+from ..services import catalogs
 from ..services import template_filler as tf
 
 router = APIRouter(prefix="/api", tags=["templates"])
@@ -172,6 +173,8 @@ def export(pid: int, body: ExportIn):
         if account["marketplace"] != profile["marketplace"]:
             raise HTTPException(400, f"This is a {profile['marketplace']} template but the account is "
                                      f"{account['marketplace']}")
+        for product_id in body.product_ids:           # Meesho: place each saree in a catalog of at most 9
+            catalogs.catalog_of(c, product_id, body.account_id)
         marks = ",".join("?" * len(body.product_ids))
         products = rows_to_dicts(c.execute(f"SELECT * FROM products WHERE id IN ({marks}) ORDER BY sku",
                                            body.product_ids))

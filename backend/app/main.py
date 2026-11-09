@@ -7,7 +7,8 @@ from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 
 from .db import init_db
-from .routers import agents, connections, content, extension, learn, listings, media, orders, product_templates, products, setup, templates
+from .routers import image_links as image_links_router
+from .routers import agents, connections, content, extension, learn, listings, media, order_sync, orders, product_templates, products, setup, stock_push, templates, uploads
 
 @asynccontextmanager
 async def lifespan(_app):
@@ -20,7 +21,7 @@ app.add_middleware(CORSMiddleware, allow_origins=["http://localhost:5173"],
                    allow_origin_regex=r"chrome-extension://[a-p]{32}", allow_methods=["*"], allow_headers=["*"])
 
 for r in (setup.router, products.router, product_templates.router, listings.router, templates.router, connections.router, content.router,
-          extension.router, media.router, orders.router, learn.router, agents.router):
+          extension.router, media.router, orders.router, learn.router, agents.router, order_sync.router, uploads.router, stock_push.router, image_links_router.router):
     app.include_router(r)
 
 

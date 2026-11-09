@@ -2,6 +2,7 @@ from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
 
 from ..db import get_conn, row_to_dict, rows_to_dicts
+from ..services import stock
 from ..services.pricing import account_price, account_sku
 
 router = APIRouter(prefix="/api", tags=["listings"])
@@ -134,6 +135,7 @@ class StockChange(BaseModel):
 
 @router.get("/inventory")
 def inventory():
+    low = stock.low_stock_at()
     with get_conn() as c:
         products = rows_to_dicts(c.execute(
             "SELECT id, sku, parent_sku, name, fabric, color, saree_type, stock_qty, images FROM products "
@@ -142,10 +144,20 @@ def inventory():
             "SELECT a.id, a.name, a.marketplace, f.name AS firm_name FROM accounts a JOIN firms f ON f.id=a.firm_id "
             "WHERE a.active=1 ORDER BY f.name, a.marketplace, a.name"))
         listings = rows_to_dicts(c.execute("SELECT product_id, account_id, stock_qty, status FROM listings"))
+        pending = {r["product_id"]: r["n"] for r in c.execute(
+            "SELECT product_id, SUM(COALESCE(qty,1)) AS n FROM orders WHERE status='pending' AND product_id IS NOT NULL "
+            "GROUP BY product_id")}
+        unlinked = c.execute("SELECT COUNT(*) FROM orders WHERE product_id IS NULL AND status IN ('pending','shipped')").fetchone()[0]
     by = {(l["product_id"], l["account_id"]): l for l in listings}
     out_of_sync = 0
+    counts = {"out": 0, "low": 0, "oversold": 0, "untracked": 0}
     for p in products:
         p["image"] = (p.pop("images") or [None])[0]
+        p["pending_units"] = pending.get(p["id"], 0)
+        s = p["stock_qty"]
+        p["level"] = "untracked" if s is None else "oversold" if s < 0 else "out" if s == 0 else "low" if s <= low else "ok"
+        if p["level"] in counts:
+            counts[p["level"]] += 1
         p["accounts"] = {}
         for a in accounts:
             l = by.get((p["id"], a["id"]))
@@ -153,19 +165,43 @@ def inventory():
                 p["accounts"][a["id"]] = {"stock": l["stock_qty"], "status": l["status"]}
                 if p["stock_qty"] is not None and l["stock_qty"] != p["stock_qty"] and l["status"] != "draft":
                     out_of_sync += 1
-    return {"products": products, "accounts": accounts, "out_of_sync": out_of_sync}
+    return {"products": products, "accounts": accounts, "out_of_sync": out_of_sync, "counts": counts,
+            "unlinked_orders": unlinked, "settings": {"from_orders": bool(stock.tracking_since()),
+                                                      "since": stock.tracking_since(), "low_stock_at": low}}
+
+
+class StockSettings(BaseModel):
+    from_orders: bool | None = None
+    low_stock_at: int | None = None
+
+
+@router.put("/inventory/settings")
+def inventory_settings(b: StockSettings):
+    try:
+        res = stock.configure(b.from_orders, b.low_stock_at)
+    except ValueError as e:
+        raise HTTPException(400, str(e))
+    if b.from_orders:
+        stock.reconcile_orders()
+    return res
+
+
+@router.get("/inventory/moves")
+def inventory_moves(product_id: int | None = None, limit: int = 100):
+    return {"moves": stock.moves(product_id, limit)}
 
 
 @router.post("/inventory/stock")
 def change_stock(changes: list[StockChange]):
     with get_conn() as c:
         for ch in changes:
-            if ch.stock_qty is not None:
-                c.execute("UPDATE products SET stock_qty=?, updated_at=datetime('now') WHERE id=?",
-                          (max(0, ch.stock_qty), ch.product_id))
-            elif ch.delta:
-                c.execute("UPDATE products SET stock_qty=MAX(0, COALESCE(stock_qty,0)+?), updated_at=datetime('now') "
-                          "WHERE id=?", (ch.delta, ch.product_id))
+            try:
+                if ch.stock_qty is not None:
+                    stock.adjust(c, ch.product_id, set_to=ch.stock_qty, reason="set", note="Set by hand")
+                elif ch.delta:
+                    stock.adjust(c, ch.product_id, delta=ch.delta, reason="manual", note="Changed by hand")
+            except LookupError:
+                raise HTTPException(404, f"Product {ch.product_id} not found")
     return {"updated": len(changes)}
 
 

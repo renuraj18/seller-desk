@@ -387,10 +387,18 @@
   async function enter(el, kind, value) {
     const v = String(value)
     if (kind === 'text') {
+      const same = () => el.value === v || el.value.replace(/,/g, '') === v
       typeText(el, v)
       el.blur(); fire(el, 'blur')
-      await sleep(20)
-      return el.value === v || el.value.replace(/,/g, '') === v ? { ok: true } : { ok: true, note: 'value changed by the site' }
+      await sleep(120)
+      if (!same()) {                     // the page reset it: type it the way a keyboard would
+        el.focus(); el.select?.()
+        document.execCommand('insertText', false, v)
+        fire(el, 'change'); el.blur(); fire(el, 'blur')
+        await sleep(150)
+      }
+      if (same()) return { ok: true }
+      return el.value === '' ? { ok: false, reason: 'the site cleared the value' } : { ok: true, note: 'value changed by the site' }
     }
     if (kind === 'select') {
       const opt = bestOption([...el.options], v)
@@ -445,6 +453,11 @@
     })
   }
 
+  let stopRequested = false
+  const requestStop = () => { stopRequested = true }
+  const clearStop = () => { stopRequested = false }
+  const stopped = () => stopRequested
+
   async function fill(payloadOrList, learned, opts = {}) {
     if (!opts._keepMarks) clearMarks()
     const payloads = Array.isArray(payloadOrList) ? payloadOrList : [payloadOrList]
@@ -452,11 +465,15 @@
     const used = new Set()
     let fields = plan(learned)
     if (opts._only) fields = fields.filter((f) => opts._only.has(f.el))
+    // SKU fields go last: choosing a colour or size can re-render the row and wipe an SKU typed earlier
+    const late = (f) => /^listing\.(sku|parent_sku)$/.test(f.source || '')
+    fields = [...fields.filter((f) => !late(f)), ...fields.filter(late)]
     // a label that repeats on the page = one section per variant (e.g. Meesho catalog with several products)
     const seen = {}
     const total = {}
     fields.forEach((f) => { total[f.norm] = (total[f.norm] || 0) + 1 })
     for (const f of fields) {
+      if (stopRequested) break                       // the user pressed Stop: leave the rest for them
       const occ = seen[f.norm] = (seen[f.norm] ?? -1) + 1
       const idx = payloads.length > 1 && total[f.norm] > 1 ? occ : 0
       const payload = payloads[idx]
@@ -479,7 +496,8 @@
         const r = await enter(f.el, f.kind, value)
         mark(f.el, r.ok)
         used.add(useKey)
-        results.push({ ...base, value: r.chosen || String(value), status: r.ok ? 'filled' : 'failed', reason: r.reason, options: r.options })
+        results.push({ ...base, value: r.chosen || String(value), status: r.ok ? 'filled' : 'failed', reason: r.reason, options: r.options,
+          ...(late(f) && r.ok ? { _recheck: String(value), _kind: f.kind } : {}) })
       } catch (e) {
         mark(f.el, false)
         results.push({ ...base, value: String(value), status: 'failed', reason: String(e.message || e) })
@@ -487,7 +505,7 @@
       await sleep(opts.delay ?? 40)
     }
     // fields that appeared because of earlier choices (e.g. Meesho's price table after Size)
-    if (!opts._second) {
+    if (!opts._second && !stopRequested) {
       await sleep(400)
       const done = new Set(results.map((r) => r.el))
       const fresh = plan(learned).filter((f) => !done.has(f.el))
@@ -496,7 +514,17 @@
         results.push(...more)
       }
     }
-    if (!opts._second) window.scrollTo({ top: 0, behavior: 'smooth' })
+    if (!opts._second && !stopRequested) {
+      // the SKU is our main key: read it back once more after the page has settled, and type it again if it was reset
+      await sleep(500)
+      for (const r of results) {
+        if (r._recheck == null || r._kind !== 'text' || r.el.value === r._recheck) continue
+        const again = await enter(r.el, r._kind, r._recheck)
+        mark(r.el, again.ok)
+        if (!again.ok) { r.status = 'failed'; r.reason = again.reason || 'the site would not keep the value' }
+      }
+      window.scrollTo({ top: 0, behavior: 'smooth' })
+    }
     return results
   }
 
@@ -554,26 +582,76 @@
   }
   function fileInputs() {
     return deepAll(document, 'input[type=file]').filter((i) => !inPanel(i) && !i.disabled &&
-      (!i.accept || /image|jpe?g|png|webp/i.test(i.accept)))
+      (!i.accept || /image|jpe?g|png|webp|\*/i.test(i.accept)))
   }
+  // Drag-and-drop boxes ("Drag & drop images here", "Click to upload"): the smallest visible elements with that wording.
+  const DROP_RE = /(drag|drop|upload|add|choose|select|browse)[^.]{0,40}(image|photo|picture|file)s?|click to upload|browse files|upload images?/i
+  function dropZones() {
+    const out = []
+    for (const el of deepAll(document, 'div, label, section, button, span, p')) {
+      if (inPanel(el) || !visible(el)) continue
+      const own = [...el.childNodes].filter((n) => n.nodeType === 3).map((n) => n.textContent).join(' ').trim()
+      if (own.length > 0 && own.length < 90 && DROP_RE.test(own)) out.push(el)
+    }
+    // climb from the label text to the box that looks like the drop area (the first ancestor with a real size)
+    return [...new Set(out.map((el) => {
+      let a = el
+      for (let i = 0; i < 6 && a.parentElement; i++) { const r = a.getBoundingClientRect(); if (r.width >= 120 && r.height >= 60) break; a = a.parentElement }
+      return a
+    }))].slice(0, 12)
+  }
+  async function dropFiles(zone, files) {
+    const dt = new DataTransfer(); files.forEach((f) => dt.items.add(f))
+    const opts = { bubbles: true, cancelable: true, composed: true, dataTransfer: dt }
+    for (const type of ['dragenter', 'dragover', 'drop']) {
+      zone.dispatchEvent(new DragEvent(type, opts))
+      await sleep(80)
+    }
+  }
+  const imageCountOnPage = () => deepAll(document, 'img').filter((i) => !inPanel(i) && visible(i)).length
+    + deepAll(document, '[style*="background-image"]').filter((i) => !inPanel(i) && visible(i)).length
+  async function setOnInput(input, files) {
+    const dt = new DataTransfer(); files.forEach((f) => dt.items.add(f))
+    input.files = dt.files; fire(input, 'input'); fire(input, 'change')
+  }
+  /** What upload boxes this page has: used by the panel's "Check image upload" and by upload reports. */
+  function describeUploadTargets() {
+    return {
+      inputs: deepAll(document, 'input[type=file]').filter((i) => !inPanel(i)).map((i) => ({
+        accept: i.accept || '', multiple: i.multiple, disabled: i.disabled, visible: visible(i),
+        near: (i.closest('div, label, section')?.textContent || '').replace(/\s+/g, ' ').trim().slice(0, 60),
+      })),
+      dropZones: dropZones().map((z) => (z.textContent || '').replace(/\s+/g, ' ').trim().slice(0, 60)),
+      imagesOnPage: imageCountOnPage(),
+      productTabs: productTabs().length,
+    }
+  }
+  /** Put photos into the page's upload box. Tries the file input, then a drag-and-drop onto the drop area, and says
+   *  which worked and whether the page visibly reacted. */
   async function attachImages(files) {
+    const before = imageCountOnPage()
     const inputs = fileInputs()
-    if (!inputs.length) return { ok: false, reason: 'No image upload box found on this page. Open the images step first.' }
-    const multi = inputs.find((i) => i.multiple)
-    if (multi) {
-      const dt = new DataTransfer(); files.forEach((f) => dt.items.add(f))
-      multi.files = dt.files; fire(multi, 'input'); fire(multi, 'change')
-      return { ok: true, count: files.length }
+    let method = ''
+    if (inputs.length) {
+      const multi = inputs.find((i) => i.multiple)
+      if (multi) { await setOnInput(multi, files); method = 'file input' }
+      else {
+        for (let i = 0; i < Math.min(inputs.length, files.length) && !stopRequested; i++) { await setOnInput(inputs[i], [files[i]]); await sleep(300) }
+        method = 'file inputs, one per slot'
+      }
+      await sleep(2500)
+      if (imageCountOnPage() > before) return { ok: true, count: files.length, method, verified: true }
     }
-    // one input per image slot (front, back, …)
-    let n = 0
-    for (let i = 0; i < Math.min(inputs.length, files.length); i++) {
-      const dt = new DataTransfer(); dt.items.add(files[i])
-      inputs[i].files = dt.files; fire(inputs[i], 'input'); fire(inputs[i], 'change')
-      n++
-      await sleep(300)
+    const zones = dropZones()
+    if (zones.length) {
+      await dropFiles(zones[0], files)
+      await sleep(2500)
+      const seen = imageCountOnPage() > before
+      return { ok: true, count: files.length, method: method ? `${method}, then drop` : 'drag and drop', verified: seen,
+        note: seen ? '' : 'Photos were sent but the page did not visibly react. Check the page, or use Check image upload.' }
     }
-    return { ok: true, count: n }
+    if (inputs.length) return { ok: true, count: files.length, method, verified: false, note: 'Photos were sent to the upload box but the page did not visibly react. Check the page.' }
+    return { ok: false, reason: 'No image upload box found on this page. Open the images step first, then use Check image upload.' }
   }
 
   // ------------------------------------------------------------- stock on inventory / listings pages
@@ -770,5 +848,5 @@
     })
   }
 
-  globalThis.SDEngine = { productTabs, openProductTab, closePopups, bestOption, headerAbove, scanOrders, activeTabText, scanStock, setStock, normalise, guess, setSynonyms, findControls, scanForm, labelOf, kindOf, plan, fill, fillOne, attachImages, b64ToFile, pickField, clearMarks, HOST_ID }
+  globalThis.SDEngine = { productTabs, openProductTab, closePopups, bestOption, headerAbove, scanOrders, activeTabText, scanStock, setStock, normalise, guess, setSynonyms, findControls, scanForm, labelOf, kindOf, plan, fill, fillOne, attachImages, describeUploadTargets, requestStop, clearStop, stopped, b64ToFile, pickField, clearMarks, HOST_ID }
 })()

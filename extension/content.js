@@ -54,6 +54,8 @@
   * { box-sizing: border-box; font-family: Inter, "Segoe UI", system-ui, sans-serif; }
   .fab { background: #7a1f2b; color: #fff; border: 0; border-radius: 999px; padding: 10px 16px; font-size: 13px; font-weight: 600; cursor: pointer; box-shadow: 0 6px 20px rgba(0,0,0,.25); display: flex; gap: 8px; align-items: center; }
   .fab .dot { width: 8px; height: 8px; border-radius: 50%; background: #f3c969; }
+  .stopfab { background: #b42318; margin-right: 8px; }
+  .stopbar { background: #fdecea; border: 1px solid #f3b8b1; border-radius: 8px; padding: 8px; margin-bottom: 10px; display: flex; gap: 8px; align-items: center; font-size: 12px; color: #7a1a12; }
   .fab.run .dot { background: #5ee08f; animation: p 1s infinite; } @keyframes p { 50% { opacity: .3 } }
   .panel { width: 380px; max-height: min(680px, calc(100vh - 32px)); background: #fff; color: #1f1a17; border-radius: 12px; box-shadow: 0 12px 40px rgba(0,0,0,.28); display: flex; flex-direction: column; overflow: hidden; font-size: 13px; }
   .head { background: #2a1a1d; color: #fff; padding: 10px 12px; display: flex; align-items: center; gap: 8px; }
@@ -114,7 +116,7 @@
 
   function render() {
     if (!S.open) {
-      root.innerHTML = `<style>${css}</style><button class="fab ${S.auto?.running ? 'run' : ''}" data-a="open"><span class="dot"></span>Seller Desk${S.auto?.running ? ' · autopilot' : ''}</button>`
+      root.innerHTML = `<style>${css}</style>${S.busy || S.auto?.running ? '<button class="fab stopfab" data-a="stopFill" title="Stop filling so you can correct the form">■ Stop</button>' : ''}<button class="fab ${S.auto?.running ? 'run' : ''}" data-a="open"><span class="dot"></span>Seller Desk${S.auto?.running ? ' · autopilot' : ''}</button>`
       return
     }
     const acc = S.ctx?.accounts.find((a) => a.id === S.accountId)
@@ -150,11 +152,17 @@
   function mainView() {
     const g = guard(); if (g) return g
     let h = notes()
+    if (S.busy === 'fill' || S.busy === 'images' || S.auto?.running) {
+      h += `<div class="stopbar"><span style="flex:1">Filling the form… press Stop to correct something yourself.</span><button class="b stop" data-a="stopFill">■ Stop</button></div>`
+    }
     if (S.auto?.running) {
       h += `<div class="msg info"><b>Autopilot</b>: ${S.auto.done} of ${S.auto.total} done. ${esc(S.auto.status || '')}</div>
         <div class="actions"><button class="b stop" data-a="stopAuto">Stop autopilot</button></div>`
     }
     h += accountPicker()
+    const acct = S.ctx.accounts.find((a) => a.id === S.accountId)
+    h += `<div class="card"><div class="row"><div class="sp"><b>New catalog upload</b><div class="muted">${acct?.add_catalog_url ? 'Add-catalog page taught. Queue sarees in Seller Desk → Upload queue and this profile fills them by itself.' : 'Open this account\'s add-catalog page, then teach it so queued sarees can be filled by themselves.'}</div></div>
+      <button class="b" data-a="teachAddUrl" title="Seller Desk will open this page to fill queued sarees">${acct?.add_catalog_url ? 'Replace page' : 'Use this page'}</button></div></div>`
     if (S.product) {
       const p = S.product
       const multi = S.group.length > 1
@@ -170,6 +178,7 @@
           <button class="b p" data-a="fill" ${S.busy ? 'disabled' : ''}>${S.busy === 'fill' ? 'Filling…' : 'Fill this page'}</button>
           <button class="b" data-a="images" ${S.busy || !imageCount() ? 'disabled' : ''}>${S.busy === 'images' ? 'Attaching…' : `Attach images (${imageCount()})`}</button>
           <button class="b" data-a="teach" ${S.busy ? 'disabled' : ''}>Teach a field</button>
+          <button class="b" data-a="checkUpload" title="Shows which upload boxes this page has, to fix photo upload problems">Check image upload</button>
         </div></div>`
       if (S.results) h += resultsView()
       h += `<div class="actions" style="margin-top:12px"><button class="b ok" data-a="done">I've submitted it ✓</button>
@@ -181,7 +190,7 @@
       <input placeholder="Search SKU, fabric, colour" data-a="q" value="${esc(S.q)}">
       <div class="list">${S.products.length ? groupedProducts().map((p) => `
         <div class="item" data-a="pick" data-id="${p.id}">${p.image ? `<img src="${esc(imgUrl(p.image))}">` : '<div class="ph"></div>'}
-          <div class="sp"><div class="sku">${esc(p.variant_count > 1 ? p.parent_sku : p.account_sku)}</div><div class="muted">${esc([p.saree_type, p.fabric, p.variant_count > 1 ? '' : p.color].filter(Boolean).join(' · '))}</div>
+          <div class="sp"><div class="sku">${esc(p.variant_count > 1 ? (p.catalog_parent_sku || p.parent_sku) : p.account_sku)}</div><div class="muted">${esc([p.saree_type, p.fabric, p.variant_count > 1 ? '' : p.color].filter(Boolean).join(' · '))}</div>
           ${p.variant_count > 1 ? `<span class="badge b-var">${p.variant_count} colours</span>` : ''}</div>
           <div style="text-align:right">${money(p.price)}<br>${p.status ? `<span class="badge b-${esc(p.status)}">${esc(p.status)}</span>` : '<span class="muted">new</span>'}</div></div>`).join('')
         : `<div class="muted" style="padding:12px">${S.tab === 'todo' ? 'Nothing waiting for this account. In Seller Desk, select sarees → <b>Add to accounts</b>.' : 'No sarees found.'}</div>`}</div>`
@@ -196,9 +205,9 @@
   function groupedProducts() {
     const seen = new Set()
     return S.products.filter((p) => {
-      if (!p.parent_sku || p.variant_count <= 1) return true
-      if (seen.has(p.parent_sku)) return false
-      seen.add(p.parent_sku); return true
+      if (!p.group_key || p.variant_count <= 1) return true
+      if (seen.has(p.group_key)) return false      // one entry per catalog (Meesho holds at most 9 colours each)
+      seen.add(p.group_key); return true
     })
   }
   const imageCount = () => (currentPayloads() || []).reduce((n, p) => n + p.images.length, 0)
@@ -226,6 +235,7 @@
       <div class="actions" style="margin-top:0">
         <button class="b p" data-a="syncStock" ${S.busy ? 'disabled' : ''}>${S.busy === 'sync' ? 'Syncing…' : 'Sync stock on this page'}</button>
         <button class="b" data-a="readStock" ${S.busy ? 'disabled' : ''}>Only read</button></div>
+      <div class="actions"><button class="b" data-a="addStockPage" title="Seller Desk will open this page by itself, find each saree by SKU and set the stock to your master stock">Add this page to automatic stock sync</button></div>
       <label class="chk"><input type="checkbox" data-a="clickSave" ${S.clickSave ? 'checked' : ''}> Click the row's Save/Update button after changing</label>`
     if (scan) {
       h += `<div class="sum"><span>🔎 ${scan.found} of ${S.stock.length} SKUs on this page</span><span class="${scan.diff ? 'diff' : 'same'}">${scan.diff} differ</span>${scan.updated != null ? `<span>✏️ ${scan.updated} updated</span>` : ''}</div>`
@@ -250,7 +260,8 @@
       <div class="muted" style="margin-bottom:8px">Open an orders or returns page on ${MP_LABEL[MP]} (any tab: pending, shipped, cancelled, returns). Show as many rows per page as you can, then capture. Repeat for each tab.</div>
       <div class="field"><label>Status for rows that don't show one</label><select data-a="pageStatus">
         ${PAGE_STATUS.map(([v, l]) => `<option value="${v}" ${S.pageStatus === v ? 'selected' : ''}>${l}${!v && S.tabHint ? ` (tab: ${esc(S.tabHint)})` : ''}</option>`).join('')}</select></div>
-      <div class="actions" style="margin-top:0"><button class="b p" data-a="captureOrders" ${S.busy ? 'disabled' : ''}>${S.busy === 'orders' ? 'Capturing…' : 'Capture orders on this page'}</button></div>
+      <div class="actions" style="margin-top:0"><button class="b p" data-a="captureOrders" ${S.busy ? 'disabled' : ''}>${S.busy === 'orders' ? 'Capturing…' : 'Capture orders on this page'}</button>
+        <button class="b" data-a="addSyncPage" title="Seller Desk will open this page by itself every day and read its orders">Add this page to daily sync</button></div>
       ${o ? `<div class="sum"><span>🧾 ${o.rows} orders found</span><span>➕ ${o.created} new</span><span>🔄 ${o.updated} updated</span></div>
         <div class="list" style="max-height:260px"><table><thead><tr><th>Order</th><th>Status</th><th>Date</th></tr></thead><tbody>
         ${o.sample.map((r) => `<tr><td class="sku">${esc(r.sub_order_id || r.order_id)}${r.sku ? `<div class="muted">${esc(r.sku)}</div>` : ''}</td><td>${esc(r.status_text || S.pageStatus || S.tabHint || '—')}</td><td class="muted">${esc(r.order_date || '')}</td></tr>`).join('')}
@@ -271,6 +282,154 @@
     } catch (e) { S.error = e.message }
     S.busy = ''; render()
   }
+
+  async function addSyncPage() {
+    S.error = ''; S.info = ''
+    try {
+      if (!S.accountId) throw new Error('Pick the account first')
+      const tab = E.activeTabText()
+      await api('/api/ext/sync/pages', 'POST', { account_id: S.accountId, url: location.href, status: S.pageStatus || S.tabHint || null, tab_label: tab || null, label: tab || document.title.slice(0, 60) })
+      S.info = 'Added to the daily sync. Seller Desk will open this page by itself and read its orders. Repeat for each orders tab you want (Pending, Shipped, Cancelled, Returns).'
+    } catch (e) { S.error = e.message }
+    render()
+  }
+
+  async function addStockPage() {
+    S.error = ''; S.info = ''
+    try {
+      if (!S.accountId) throw new Error('Pick the account first')
+      await api('/api/ext/stockpush/pages', 'POST', { account_id: S.accountId, url: location.href, label: document.title.slice(0, 80) })
+      S.info = 'Added. Seller Desk will open this page by itself, find each saree by SKU and set its stock to your master stock. Show as many rows per page as the portal allows.'
+    } catch (e) { S.error = e.message }
+    render()
+  }
+
+  // ---------------------------------------------------------------- stock push: the background worker asks this page to match the master stock
+  // Finds each listed saree's row by its account SKU (then master SKU, then ASIN/FSN) and sets the portal's number to Seller Desk's master stock.
+  async function stockPush({ accountId }) {
+    if (onLoginPage()) return { state: 'signed_out', error: 'The seller panel asked to sign in' }
+    const targets = await api(`/api/ext/stockpush/targets?account_id=${accountId}`)
+    if (!targets.length) return { state: 'ok', found: 0, updated: 0, failed: [], notOnPage: 0 }
+    const items = targets.map((t) => ({ product_id: t.product_id, keys: [t.account_sku, t.sku, t.listing_ref] }))
+    let found = []; let last = -1
+    const end = Date.now() + 30000
+    while (Date.now() < end) {
+      if (onLoginPage()) return { state: 'signed_out', error: 'The seller panel asked to sign in' }
+      found = E.scanStock(items)
+      if (found.length && found.length === last) break
+      last = found.length
+      await sleep(1500)
+    }
+    if (!found.length) return { state: 'empty', error: 'None of the listed SKUs were found on this page. Check it is the inventory page and shows many rows.' }
+    const byId = Object.fromEntries(targets.map((t) => [t.product_id, t]))
+    const seen = found.filter((f) => f.stock != null).map((f) => ({ key: byId[f.product_id].account_sku, stock: f.stock }))
+    if (seen.length) await api('/api/ext/stock-seen', 'POST', { account_id: accountId, rows: seen })
+    let updated = 0; const failed = []
+    for (const f of found) {
+      const t = byId[f.product_id]
+      if (f.stock === t.target) continue
+      const res = await E.setStock(f.row, t.target, true)
+      if (res.ok && !res.note) {
+        updated++
+        await api('/api/ext/stock-set', 'POST', { product_id: t.product_id, account_id: accountId, stock: t.target })
+      } else failed.push(`${t.account_sku}: ${res.reason || res.note}`)
+      await sleep(200)
+    }
+    return { state: 'ok', found: found.length, updated, failed, notOnPage: targets.length - found.length }
+  }
+  chrome.runtime.onMessage.addListener((msg, _sender, reply) => {
+    if (msg?.type !== 'sd-stock') return false
+    stockPush(msg).then(reply, (e) => reply({ state: 'error', error: e.message }))
+    return true
+  })
+
+  async function teachAddUrl() {
+    S.error = ''; S.info = ''
+    try {
+      if (!S.accountId) throw new Error('Pick the account first')
+      await api(`/api/ext/accounts/${S.accountId}/add-catalog-url`, 'PUT', { url: location.href })
+      await refreshLearned()
+      S.info = 'Saved. Queued sarees for this account will be filled on this page.'
+    } catch (e) { S.error = e.message }
+    render()
+  }
+
+  // ---------------------------------------------------------------- upload queue: the background worker asks this page to fill a saree
+  async function uploadFill({ productId, accountId, submit }) {
+    if (onLoginPage()) return { state: 'failed', error: 'The seller panel asked to sign in' }
+    S.accountId = accountId; S.error = ''; S.info = ''; S.onlyEmpty = false
+    E.clearStop()
+    await refreshLearned()
+    if (!(await waitUntil(formReady, 30000))) {
+      return { state: 'failed', error: 'No catalog form found on this page. Some portals need a category chosen first: open the form to the point where the fields show, then use "Replace page".' }
+    }
+    S.payloads = await api(`/api/ext/payload-group?product_id=${productId}&account_id=${accountId}`)
+    S.variantIdx = -1
+    const results = await doFill()
+    S.info = ''
+    if (!E.stopped() && imageCount()) await doImages()
+    if (E.stopped()) return { state: 'filled', message: 'Stopped by you: correct the form, then submit it yourself.' }
+    const problems = (results || []).filter((r) => r.status === 'failed' || r.status === 'empty').map((r) => r.label)
+    const issues = [...problems.slice(0, 6), ...(S.error ? [S.error] : []), ...(/did not visibly react/.test(S.info) ? ['photos were sent but the page did not visibly react'] : [])]
+    const count = (st) => (results || []).filter((r) => r.status === st).length
+    const detail = {
+      page: location.pathname, counts: { filled: count('filled'), failed: count('failed'), empty: count('empty'), unknown: count('unknown') },
+      images: imageCount(), uploadMethod: S.lastUploadMethod || null, uploadTargets: E.describeUploadTargets(), error: S.error || null,
+      problems: (results || []).filter((r) => ['failed', 'empty', 'unknown'].includes(r.status)).slice(0, 40)
+        .map((r) => ({ label: r.label, status: r.status, reason: r.reason || null, options: (r.options || []).slice(0, 8) })),
+    }
+    if (submit && !issues.length) {
+      const btn = submitButton()
+      if (!btn) return { state: 'filled', detail, message: 'Filled. No Submit button found: review and submit it yourself.' }
+      btn.click()
+      await sleep(3000)
+      const errs = visibleErrors()
+      if (errs.length) return { state: 'filled', detail, message: `The portal reported: ${errs.slice(0, 3).join('; ')}. Fix and submit it yourself.` }
+      return { state: 'submitted', detail, message: 'Submitted by Seller Desk' }
+    }
+    return { state: 'filled', detail, message: issues.length ? `Filled, but check: ${issues.join('; ')}` : 'Filled. Review and submit it.' }
+  }
+  chrome.runtime.onMessage.addListener((msg, _sender, reply) => {
+    if (msg?.type !== 'sd-upload') return false
+    uploadFill(msg).then(reply, (e) => reply({ state: 'failed', error: e.message }))
+    return true
+  })
+
+  // ---------------------------------------------------------------- daily sync: the background worker asks this page for its orders
+  const LOGIN_URL_RE = /(\/login|sign-?in|\/ap\/|\/auth\b|otp)/i
+  const EMPTY_RE = /(no (orders?|data|records?|results?|shipments?) (found|available|to show|yet)|you (do not|don't) have any|nothing to (show|display))/i
+  const onLoginPage = () => LOGIN_URL_RE.test(location.pathname + location.search) || !!document.querySelector('input[type=password]')
+  const tabKey = (t) => String(t || '').toLowerCase().replace(/[\d(),]/g, '').replace(/\s+/g, ' ').trim()
+  function clickTab(label) {
+    const want = tabKey(label)
+    const el = [...document.querySelectorAll('[role=tab], button, a, li, div[class*="tab" i]')]
+      .find((n) => !n.closest('#seller-desk-ext-host') && n.children.length < 4 && tabKey(n.textContent) === want)
+    if (!el) return false
+    el.click(); return true
+  }
+  async function syncScan({ skus = [], tabLabel = '', timeout = 30000 }) {
+    const end = Date.now() + timeout
+    let triedTab = false; let last = -1; let rows = []
+    while (Date.now() < end) {
+      if (onLoginPage()) return { state: 'signed_out', error: 'The seller panel asked to sign in' }
+      const active = E.activeTabText()
+      if (tabLabel && !triedTab && active && tabKey(active) !== tabKey(tabLabel)) {
+        triedTab = true
+        if (clickTab(tabLabel)) { await sleep(2000); last = -1; continue }
+      }
+      rows = E.scanOrders(MP, skus)
+      if (rows.length && rows.length === last) return { state: 'ok', rows, tabHint: active || null }
+      if (!rows.length && EMPTY_RE.test((document.body?.innerText || '').slice(0, 20000))) return { state: 'ok', rows: [], tabHint: active || null }
+      last = rows.length
+      await sleep(1500)
+    }
+    return rows.length ? { state: 'ok', rows, tabHint: E.activeTabText() || null } : { state: 'empty', error: 'No order rows found on the page' }
+  }
+  chrome.runtime.onMessage.addListener((msg, _sender, reply) => {
+    if (msg?.type !== 'sd-scan') return false
+    syncScan(msg).then(reply, (e) => reply({ state: 'error', error: e.message }))
+    return true
+  })
 
   function teachView() {
     const t = S.teach
@@ -419,7 +578,7 @@
       if (pls.length > 1 && tabs.length >= 2) {
         // Meesho-style catalog: one tab per product. Fill each tab with its own colour variant.
         S.results = []
-        for (let i = 0; i < Math.min(pls.length, tabs.length); i++) {
+        for (let i = 0; i < Math.min(pls.length, tabs.length) && !E.stopped(); i++) {
           await E.openProductTab(i)
           const res = await E.fill(pls[i], S.ctx.learned, { onlyEmpty: S.onlyEmpty })
           const tag = ` · ${pls[i].values['product.color'] || 'product ' + (i + 1)}`
@@ -439,22 +598,48 @@
     S.busy = 'images'; S.error = ''; render()
     let ok = false
     try {
-      const files = []
-      for (const pl of currentPayloads()) {
+      const filesOf = async (pl) => {
+        const files = []
         for (const [i, url] of pl.images.entries()) {
           const r = await send({ type: 'image', url })
           if (!r.ok) throw new Error(`Image ${i + 1} of ${pl.values['listing.sku']}: ${r.error}`)
           const ext = (r.type.split('/')[1] || 'jpg').replace('jpeg', 'jpg').replace('svg+xml', 'svg')
           files.push(E.b64ToFile(r.b64, r.type, `${pl.values['listing.sku']}-${i + 1}.${ext}`))
         }
+        return files
       }
-      const res = await E.attachImages(files)
-      if (!res.ok) throw new Error(res.reason)
-      S.info = `${res.count} image(s) attached`
+      const pls = currentPayloads()
+      const tabs = E.productTabs()
+      const notes = []
+      let total = 0
+      if (pls.length > 1 && tabs.length >= pls.length) {
+        // one tab per colour (Meesho): each colour's photos go into its own tab
+        for (let i = 0; i < pls.length; i++) {
+          await E.openProductTab(i)
+          const res = await E.attachImages(await filesOf(pls[i]))
+          if (!res.ok) throw new Error(`${pls[i].values['product.color'] || 'Product ' + (i + 1)}: ${res.reason}`)
+          total += res.count; if (res.note) notes.push(res.note)
+        }
+        await E.openProductTab(0)
+      } else {
+        const all = []
+        for (const pl of pls) all.push(...(await filesOf(pl)))
+        const res = await E.attachImages(all)
+        if (!res.ok) throw new Error(res.reason)
+        total = res.count; if (res.note) notes.push(res.note)
+        S.lastUploadMethod = res.method
+      }
+      S.info = `${total} image(s) sent${S.lastUploadMethod ? ` (${S.lastUploadMethod})` : ''}${notes.length ? '. ' + notes[0] : ''}`
       ok = true
     } catch (e) { S.error = e.message }
     S.busy = ''; render()
     return ok
+  }
+  function checkUpload() {
+    const d = E.describeUploadTargets()
+    S.error = ''
+    S.info = `Upload boxes on this page: ${d.inputs.length} file input(s)${d.inputs.map((i) => ` [${i.multiple ? 'multiple' : 'single'}${i.visible ? '' : ', hidden'}${i.accept ? ', ' + i.accept : ''}${i.near ? ', near "' + i.near + '"' : ''}]`).join('')}; ${d.dropZones.length} drop area(s)${d.dropZones.map((z) => ` ["${z}"]`).join('')}; ${d.productTabs} product tab(s); ${d.imagesOnPage} images visible.`
+    render()
   }
   async function markDone(ids) {
     for (const id of ids) await api('/api/ext/done', 'POST', { product_id: id, account_id: S.accountId })
@@ -477,10 +662,17 @@
   // ---------------------------------------------------------------- autopilot (survives page reloads)
   async function saveAuto() { await store.set('autopilot', S.auto) }
   async function startAuto() {
+    E.clearStop()
     const items = groupedProducts().map((p) => p.id)
     S.auto = { running: true, marketplace: MP, accountId: S.accountId, queue: items, done: 0, total: items.length, startUrl: location.href, submit: S.autoSubmit, status: 'Starting…' }
     await saveAuto()
     await autoStep()
+  }
+  async function stopFilling() {
+    E.requestStop()
+    if (S.auto?.running) await stopAuto('Stopped. Correct the form yourself; press Fill again to continue (tick “Only fill empty fields” to keep what is done).')
+    S.info = 'Stopped. Correct the form yourself; press Fill again to continue (tick “Only fill empty fields” to keep what is done).'
+    render()
   }
   async function stopAuto(msg) {
     if (S.auto) S.auto.running = false
@@ -500,7 +692,9 @@
     await pick(a.queue[0])
     a.status = `Filling ${S.product?.account_sku || ''}`; render()
     const results = await doFill()
+    if (E.stopped()) { await stopAuto('Stopped. Correct the form yourself; press Fill again to continue (tick “Only fill empty fields” to keep what is done).'); return }
     if (imageCount()) await doImages()
+    if (E.stopped()) { await stopAuto('Stopped. Correct the form yourself; press Fill again to continue (tick “Only fill empty fields” to keep what is done).'); return }
     const problems = (results || []).filter((r) => r.status === 'failed' || r.status === 'empty')
     if (a.submit && !problems.length && !S.error) {
       const btn = submitButton()
@@ -628,8 +822,10 @@
     else if (a === 'pick') pick(Number(t.dataset.id))
     else if (a === 'variant') { S.variantIdx = Number(t.dataset.i); S.results = null; E.clearMarks(); render() }
     else if (a === 'change') { S.product = null; S.payloads = null; S.results = null; E.clearMarks(); await loadProducts(); render() }
-    else if (a === 'fill') doFill()
-    else if (a === 'images') doImages()
+    else if (a === 'fill') { E.clearStop(); doFill() }
+    else if (a === 'images') { E.clearStop(); doImages() }
+    else if (a === 'stopFill') stopFilling()
+    else if (a === 'checkUpload') checkUpload()
     else if (a === 'teach') startTeach()
     else if (a === 'teachRes') startTeach(S.results[Number(t.dataset.i)])
     else if (a === 'cancelTeach') { S.teach = null; render() }
@@ -643,6 +839,9 @@
     else if (a === 'syncStock') scanStock(true)
     else if (a === 'readStock') scanStock(false)
     else if (a === 'captureOrders') captureOrders()
+    else if (a === 'addSyncPage') addSyncPage()
+    else if (a === 'teachAddUrl') teachAddUrl()
+    else if (a === 'addStockPage') addStockPage()
     else if (a === 'learnScan') learnScan()
     else if (a === 'learnSave') learnSave()
     else if (a === 'learnCancel') { S.learn.rows = null; S._learnScroll = 0; render() }

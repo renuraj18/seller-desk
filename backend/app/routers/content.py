@@ -57,6 +57,16 @@ def save(pid: int, marketplace: Market, body: DraftIn):
     return ai_writer.save_draft(p, marketplace, d, body.approved)
 
 
+@router.post("/products/{pid}/seo-check/{marketplace}")
+def seo_dry_run(pid: int, marketplace: Market, body: DraftIn):
+    """Score content against the marketplace's limits and blocked words without saving anything."""
+    p = _product(pid)
+    d = ai_writer.enforce_rules(body.model_dump(), p, marketplace)
+    kw = ai_writer.keyword_set_for(p)
+    chk = content_svc.seo_check(d, p, marketplace, ai_writer._split((kw or {}).get("primary_keywords")))
+    return {"content_after_limits": d, "score": chk["score"], "issues": chk["issues"], "rules": content_svc.MARKETPLACE_RULES[marketplace]}
+
+
 @router.post("/products/{pid}/drafts/{marketplace}/ai")
 def ai_draft(pid: int, marketplace: Market):
     p = _product(pid)
@@ -149,12 +159,14 @@ def delete_set(sid: int):
 class SettingsIn(BaseModel):
     anthropic_api_key: str | None = None
     ai_model: str | None = None
+    meesho_languages: str | None = None
 
 
 @router.get("/settings")
 def get_settings():
     return {"anthropic_api_key": sec.mask(sec.get_setting("anthropic_api_key_secret")),
-            "ai_model": sec.get_setting("ai_model") or ai_writer.DEFAULT_MODEL}
+            "ai_model": sec.get_setting("ai_model") or ai_writer.DEFAULT_MODEL,
+            "meesho_languages": ai_writer.description_languages()}
 
 
 @router.put("/settings")
@@ -163,6 +175,8 @@ def put_settings(s: SettingsIn):
         sec.set_setting("anthropic_api_key_secret", s.anthropic_api_key.strip() or None)
     if s.ai_model:
         sec.set_setting("ai_model", s.ai_model.strip())
+    if s.meesho_languages is not None:
+        sec.set_setting("meesho_languages", s.meesho_languages.strip()[:120] or None)
     return get_settings()
 
 

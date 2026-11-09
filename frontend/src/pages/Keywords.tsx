@@ -21,7 +21,7 @@ export default function Keywords() {
   }
   return (
     <>
-      <PageHead title="SEO keywords" sub="One keyword plan per saree type. AI drafts use it: primary words go in the title, secondary in highlights and bullets, long-tail in search terms.">
+      <PageHead title="3. SEO keywords" sub="One keyword plan per saree type. AI drafts use it: primary words go in the title, secondary in highlights and bullets, long-tail in search terms.">
         <button className="primary" onClick={() => setEdit({ ...blank })}>Add keyword set</button>
       </PageHead>
       <div className="notice info">

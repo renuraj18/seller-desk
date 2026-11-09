@@ -13,8 +13,9 @@ MARKETPLACE_RULES = {
                "bullet_max": 255},
     "flipkart": {"title_max": 100, "highlights_max": 0, "search_terms_max_bytes": 500, "bullets": 5,
                  "bullet_max": 255},
+    # Meesho's description box holds 1400 characters: plenty of room for keywords, so aim for 900+
     "meesho": {"title_max": 100, "highlights_max": 0, "search_terms_max_bytes": 500, "bullets": 5,
-               "bullet_max": 255},
+               "bullet_max": 255, "description_max": 1400, "description_good_from": 900},
 }
 
 # Amazon rejects titles containing these characters (plus pipes/semicolons/colons per title rules)
@@ -171,9 +172,11 @@ def generate_bullets(p: dict) -> list[str]:
     return bullets[:5]
 
 
-def generate_description(p: dict, brand: str | None = None) -> str:
+def generate_description(p: dict, brand: str | None = None, marketplace: str | None = None) -> str:
     if _v(p, "description"):
         return _v(p, "description")
+    if marketplace == "meesho":
+        return _meesho_description(p, brand)
     brand = (brand or _v(p, "brand")).strip()
     fabric, stype, color = _v(p, "fabric"), _v(p, "saree_type"), _v(p, "color")
     core = " ".join(_dedupe_phrase(color, stype if stype.lower() not in ("regular",) else "", fabric)) or "This"
@@ -192,6 +195,42 @@ def generate_description(p: dict, brand: str | None = None) -> str:
     if _v(p, "wash_care"):
         s.append(f"Care: {_v(p, 'wash_care')}.")
     return " ".join(s)
+
+
+def _meesho_description(p: dict, brand: str | None = None) -> str:
+    """A fuller description that uses Meesho's 1400 characters, built only from the saree's own attributes."""
+    brand = (brand or _v(p, "brand")).strip()
+    fabric, stype, color = _v(p, "fabric"), _v(p, "saree_type"), _v(p, "color")
+    occ = _v(p, "occasion")
+    core = " ".join(_dedupe_phrase(color, stype if stype.lower() not in ("regular",) else "", fabric)) or "This"
+    paras = [f"{core} saree for women" + (f" from {brand}" if brand else "") + (f", made for {occ.lower()} wear" if occ else "") + "."]
+    det = [x for x in (_v(p, "pattern"), _v(p, "work")) if x]
+    design = []
+    if det:
+        design.append("Design: " + " with ".join(d.lower() for d in det))
+    if _v(p, "border"):
+        design.append(f"Border: {_v(p, 'border')}")
+    if _v(p, "pallu"):
+        design.append(f"Pallu: {_v(p, 'pallu')}")
+    if design:
+        paras.append(". ".join(design) + ".")
+    if fabric:
+        paras.append(f"Fabric: {fabric}" + (f" {stype}" if stype and stype.lower() not in ("regular", fabric.lower()) else "") + " saree.")
+    size = []
+    if _v(p, "saree_length_m"):
+        size.append(f"Saree length: {_v(p, 'saree_length_m')} metres")
+    if _v(p, "blouse_piece"):
+        size.append(f"Blouse: {_v(p, 'blouse_piece')}" + (f", {_v(p, 'blouse_length_m')} metres" if _v(p, "blouse_length_m") else ""))
+    if size:
+        paras.append(". ".join(size) + ".")
+    if color:
+        paras.append(f"Colour: {color}. Colour may look slightly different from the photos because of lighting and screen settings.")
+    paras.append("Package contains: 1 saree" + (" with blouse piece" if _v(p, "blouse_piece") and "without" not in _v(p, "blouse_piece").lower() else "") + ".")
+    if _v(p, "wash_care"):
+        paras.append(f"Care: {_v(p, 'wash_care')}.")
+    if _v(p, "country_of_origin"):
+        paras.append(f"Country of origin: {_v(p, 'country_of_origin')}.")
+    return _truncate_words("\n".join(paras), MARKETPLACE_RULES["meesho"]["description_max"])
 
 
 def generate_search_terms(p: dict, marketplace: str) -> str:
@@ -285,7 +324,13 @@ def seo_check(content: dict, product: dict, marketplace: str, primary_keywords: 
     bullets = [b for b in (content.get("bullets") or []) if b]
     if len(bullets) < 5:
         bad(5, f"Only {len(bullets)} of 5 bullet points")
-    if len(content.get("description") or "") < 150:
+    desc_len = len(content.get("description") or "")
+    desc_max, good_from = rules.get("description_max"), rules.get("description_good_from")
+    if desc_max and desc_len > desc_max:
+        bad(10, f"Description is {desc_len} chars; limit is {desc_max}")
+    elif good_from and desc_len < good_from:
+        bad(8, f"Description is {desc_len} chars; {marketplace.title()} allows {desc_max}. Use {good_from}+ with natural keyword phrases")
+    elif desc_len < 150:
         bad(5, "Description under 150 characters")
     required = ["fabric", "saree_type", "color", "pattern", "occasion", "saree_length_m", "blouse_piece", "hsn",
                 "gst_rate", "mrp", "selling_price", "net_weight_g"]
@@ -309,7 +354,7 @@ def generate_all(p: dict, marketplace: str, brand: str | None = None, title_over
         "highlights": generate_highlights(p, marketplace),
         "bullets": bullets,
         "key_features": " | ".join(b.split(": ", 1)[-1] for b in bullets),
-        "description": generate_description(p, brand),
+        "description": generate_description(p, brand, marketplace),
         "search_terms": generate_search_terms(p, marketplace),
         "source": "rules",
     }

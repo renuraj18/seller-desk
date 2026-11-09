@@ -9,6 +9,11 @@ Use this whenever the user asks about Amazon orders, returns, stock or listings.
 
 ## Daily check
 
+Call `get_daily_check` first. Seller Desk has already worked out pending, overdue and no-stock orders, returns and how
+fresh the data is from the browser extension's sync. Report from it; use the other tools only for detail. Add an
+`add_task` for each item only the user can do (sign in again, dispatch overdue orders, fix a stock gap).
+
+
 1. `get_overview`. Note each account's newest order date.
 2. `get_orders` with `status: "pending"` per account, and the oldest pending date. Late shipment hurts account
    health on Amazon, so list anything pending for more than a day.

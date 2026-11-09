@@ -47,13 +47,31 @@ MARKETPLACE_BRIEF = {
   No brand needed.
 - "highlights": "" (empty).
 - "bullets": exactly 5 short selling points under 100 characters.
-- "description": 300-800 characters, simple English.
+- "description": 900-1400 characters (HARD limit 1400 characters), written to attract more customers the way this
+  seller's best listings are: MULTILINGUAL. Use English plus EVERY language named under "Description languages" below,
+  each written in its own script, so shoppers in each state find and trust the listing. With several languages the
+  space is tight (1400 characters), so keep every sentence short. Structure:
+  1. opening line in English: colour + design + saree type, one sparkle emoji at most;
+  2. one or two short English sentences about the colour, the motif/border/pallu and the look;
+  3. then ONE short sentence per language (the same message: colour, design, look, occasions), in the order listed,
+     leaving out nothing from the language list;
+  4. one "Suitable for customers looking for: ..." sentence of 6-8 English search phrases from the keyword plan;
+  5. then " --- " followed by 8-12 comma-separated keyword tags (English plus a few regional-language search words).
+  Use the primary, secondary and long-tail keywords naturally. Only facts from the product data: never invent fabric
+  composition, size or claims, and tell the reader to check size and fabric in the listing details. No repeated
+  sentences. Count characters (Telugu/Hindi letters count too) and stay at or under 1400.
+  Style reference only (it describes a different product, copy none of its facts): Royal Blue Traditional Designer Fabric ✨ ఈ beautiful blue colour fabric కి golden Kolam/Rangoli inspired traditional motifs మరియు elegant border premium ethnic look ఇస్తాయి. इसका rich blue shade और golden design classy, elegant aur premium feel देता है. తెలుగు లో చెప్పాలంటే, ఈ సంప్రదాయ డిజైన్ ఫ్యాబ్రిక్ మీ ethnic collection కి అందమైన, క్లాసీ లుక్ ఇస్తుంది. Suitable for customers looking for blue ethnic fabric, traditional designer material, golden motif fabric, Kolam design textile, Rangoli pattern fabric, festive designer collection. --- Royal Blue Fabric, Traditional Designer Fabric, Golden Kolam Design, Rangoli Pattern, Ethnic Material, Festive Collection,
 - "search_terms": comma-separated keywords, up to 450 characters.""",
 }
 
 
 class AIError(RuntimeError):
     pass
+
+
+def description_languages() -> str:
+    """Languages mixed into Meesho descriptions (Settings). 'English' alone turns the multilingual style off."""
+    return get_setting("meesho_languages") or "English, Tamil, Hindi, Telugu, Malayalam, Kannada"
 
 
 def keyword_set_for(product: dict) -> dict | None:
@@ -121,8 +139,13 @@ def enforce_rules(draft: dict, product: dict, marketplace: str) -> dict:
             st = cand
     else:
         st = st[:450]
+    desc = str(draft.get("description") or "").strip()
+    if rules.get("description_max") and len(desc) > rules["description_max"]:
+        cut = desc[:rules["description_max"]]
+        stop = max(cut.rfind(". "), cut.rfind(".\n"))            # end on a full sentence when there is one
+        desc = cut[:stop + 1] if stop > rules["description_max"] * 0.6 else content_svc._truncate_words(desc, rules["description_max"])
     return blocked.apply({"title": title, "highlights": hl, "bullets": bullets,
-                          "description": str(draft.get("description") or "").strip(), "search_terms": st}, marketplace)
+                          "description": desc, "search_terms": st}, marketplace)
 
 
 def draft_with_ai(product: dict, marketplace: str, brand: str | None = None, model: str | None = None) -> dict:
@@ -131,6 +154,7 @@ def draft_with_ai(product: dict, marketplace: str, brand: str | None = None, mod
     if brand:
         data["brand"] = brand
     prompt = [f"Marketplace brief:\n{MARKETPLACE_BRIEF[marketplace]}",
+              *([f"Description languages: {description_languages()}"] if marketplace == "meesho" else []),
               f"Product data (the only facts you may use):\n{json.dumps(data, ensure_ascii=False, indent=1)}"]
     if kw:
         prompt.append("Keyword plan for this saree type:\n"

@@ -2,6 +2,7 @@ from typing import Literal
 
 from fastapi import APIRouter, File, HTTPException, UploadFile
 from fastapi.responses import Response
+from pydantic import BaseModel, Field
 
 from ..db import get_conn, row_to_dict, rows_to_dicts
 from ..fields import PRODUCT_FIELD_KEYS, PRODUCT_FIELDS, all_sources
@@ -127,11 +128,43 @@ def update_product(product_id: int, data: dict):
         return _get(c, product_id)
 
 
+def _listed_on(c, product_id: int) -> list[str]:
+    return [f"{r['name']} ({r['status']})" for r in c.execute(
+        "SELECT a.name, l.status FROM listings l JOIN accounts a ON a.id=l.account_id "
+        "WHERE l.product_id=? AND l.status IN ('exported','live','inactive')", (product_id,))]
+
+
 @router.delete("/products/{product_id}")
-def delete_product(product_id: int):
+def delete_product(product_id: int, force: bool = False):
     with get_conn() as c:
+        listed = _listed_on(c, product_id)
+        if listed and not force:
+            raise HTTPException(409, f"Still listed on {', '.join(listed)}. Deleting here does not remove it from the marketplace.")
         c.execute("DELETE FROM products WHERE id=?", (product_id,))
     return {"ok": True}
+
+
+class BulkDelete(BaseModel):
+    product_ids: list[int] = Field(min_length=1, max_length=500)
+    force: bool = False
+
+
+@router.post("/products/delete")
+def delete_products(b: BulkDelete):
+    """Delete several sarees. Ones that are exported or live on an account are held back unless force is set."""
+    deleted, held = 0, []
+    with get_conn() as c:
+        for pid in b.product_ids:
+            row = c.execute("SELECT sku FROM products WHERE id=?", (pid,)).fetchone()
+            if not row:
+                continue
+            listed = _listed_on(c, pid)
+            if listed and not b.force:
+                held.append({"id": pid, "sku": row["sku"], "listed_on": listed})
+                continue
+            c.execute("DELETE FROM products WHERE id=?", (pid,))
+            deleted += 1
+    return {"deleted": deleted, "held_back": held}
 
 
 @router.post("/products/{product_id}/duplicate")

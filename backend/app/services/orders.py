@@ -16,6 +16,7 @@ from openpyxl.utils import get_column_letter
 
 from ..db import DATA_DIR, dump, get_conn, rows_to_dicts
 from ..fields import normalise
+from . import stock
 from .marketplaces import _num
 
 MASTER_PATH = DATA_DIR / "orders_master.xlsx"
@@ -55,6 +56,13 @@ def parse_date(v) -> str | None:
     if isinstance(v, (datetime, date)):
         return v.strftime("%Y-%m-%d")
     s = str(v).strip()
+    iso = re.match(r"^(\d{4})-(\d{2})-(\d{2})(?:$|[T\s])", s)
+    if iso:  # year-first is unambiguous; day-first parsing would swap the month and day of 2026-11-02
+        try:
+            d = datetime(int(iso[1]), int(iso[2]), int(iso[3]))
+            return d.strftime("%Y-%m-%d") if 2015 <= d.year <= 2100 else None
+        except ValueError:
+            return None
     for dayfirst in (True, False):
         try:
             d = pd.to_datetime(s, dayfirst=dayfirst, errors="raise")
@@ -95,15 +103,16 @@ def save_orders(account_id: int, rows: list[dict], source: str) -> dict:
             else:
                 c.execute(
                     "INSERT INTO orders (account_id, order_id, sub_order_id, order_date, sku, qty, sale_amount, status, "
-                    "status_text, cancel_charges, return_charges, awb, source, raw, updated_at) "
-                    "VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,datetime('now'))",
+                    "status_text, cancel_charges, return_charges, awb, source, raw, updated_at, first_seen_at) "
+                    "VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,datetime('now'),datetime('now'))",
                     (account_id, oid, sub, r.get("order_date"), r.get("sku"), r.get("qty") or 1, r.get("sale_amount"),
                      status or "pending", r.get("status_text"), r.get("cancel_charges"), r.get("return_charges"),
                      r.get("awb"), source, dump(r.get("raw") or {})))
                 created += 1
     link_products()
+    stock_moves = stock.reconcile_orders()
     master = write_master()
-    return {"created": created, "updated": updated, "master_saved": master}
+    return {"created": created, "updated": updated, "master_saved": master, "stock_moves": stock_moves}
 
 
 def link_products():
